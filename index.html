@@ -446,6 +446,36 @@ function tomorrow(){
 }
 function cartTotalQty(){ return state.cart.reduce((s,c)=>s+c.qty,0); }
 
+const PERSIST_KEY = 'kojubu_app_state_v1';
+function saveAppState(){
+  try{
+    const toSave = {
+      screen: state.screen,
+      activeCat: state.activeCat,
+      detailId: state.detailId,
+      cart: state.cart,
+      adminLog: state.adminLog,
+      viewMode: state.viewMode,
+      pageSize: state.pageSize,
+      currentPage: state.currentPage,
+    };
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(toSave));
+  }catch(e){ /* localStorage 사용 불가 환경이면 그냥 무시 */ }
+}
+function loadAppState(){
+  try{
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if(!raw) return;
+    const saved = JSON.parse(raw);
+    Object.assign(state, saved);
+    // 상세페이지로 복원되는 경우 수량/납품일 입력값은 새로 시작하도록 리셋
+    if(state.screen==='detail'){
+      state.qty = 1;
+      state.deliveryDate = tomorrow();
+    }
+  }catch(e){ /* 저장된 값이 깨졌으면 무시하고 기본값 사용 */ }
+}
+
 function showToast(msg, icon){
   const t=document.getElementById('toast');
   t.innerHTML = (icon?icon+' ':'')+msg;
@@ -537,6 +567,7 @@ function submitOrder(){
 }
 
 function render(){
+  saveAppState();
   const app = document.getElementById('app');
   if(state.screen==='home') app.innerHTML = renderHome();
   else if(state.screen==='detail') app.innerHTML = renderDetail();
@@ -833,7 +864,7 @@ function renderCart(){
     `}
     ${state.cart.length>0 ? `
       <div class="cart-summary">
-        <div class="sumrow"><span>총 품목</span><span>${state.cart.length}건 · ${cartTotalQty()}개</span></div>
+        <div class="sumrow"><span>총 품목</span><span>${state.cart.length}건</span></div>
         <div class="sumrow total"><span>발주 예상 금액</span><span>${money(state.cart.reduce((s,c)=>s+findProduct(c.productId).price*c.qty,0))}원</span></div>
         <button class="btn btn-solid btn-full" onclick="submitOrder()">발주 요청 보내기</button>
       </div>
@@ -905,6 +936,7 @@ function navbar(){
   `;
 }
 
+loadAppState();
 loadProducts();
 </script>
 </body>
