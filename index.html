@@ -149,14 +149,20 @@
   .btn-full{width:100%;}
 
   .cartlist{padding:4px 18px;display:flex;flex-direction:column;gap:10px;}
-  .citem{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;gap:10px;background:#fff;}
-  .cthumb{width:48px;height:48px;border-radius:9px;background:var(--sand);display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;overflow:hidden;}
+  .citem{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;}
+  .citem-top{display:flex;gap:10px;}
+  .citem-bottom{display:flex;justify-content:flex-end;margin-top:10px;}
+  .cthumb{width:48px;height:48px;border-radius:9px;background:var(--sand);display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;overflow:hidden;cursor:pointer;}
   .cthumb img{width:100%;height:100%;object-fit:cover;}
   .cinfo{flex:1;min-width:0;}
-  .cname{font-size:12.5px;font-weight:700;margin-bottom:2px;}
+  .cname{font-size:12.5px;font-weight:700;margin-bottom:2px;cursor:pointer;}
   .cmeta{font-size:10.5px;color:var(--muted);margin-bottom:4px;}
   .cmeta b{color:var(--navy);}
-  .cremove{font-size:10px;color:var(--coral);cursor:pointer;font-weight:700;}
+  .cremove-x{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:var(--sand);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;cursor:pointer;}
+  .cremove-x:active{background:var(--coral-dim);color:var(--coral);}
+  .mini-stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden;}
+  .mini-stepper button{width:30px;height:30px;border:none;background:var(--sand);font-size:14px;color:var(--navy);cursor:pointer;font-weight:700;}
+  .mini-stepper input{width:42px;height:30px;border:none;text-align:center;font-size:12.5px;font-weight:700;font-family:inherit;border-left:1px solid var(--line);border-right:1px solid var(--line);}
   .empty{padding:60px 30px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.6;}
   .empty .big{font-size:34px;margin-bottom:10px;}
 
@@ -499,6 +505,17 @@ function addToCart(){
   showToast(p.name+' 장바구니에 담았어요','🛒');
   render();
 }
+function changeCartQty(idx, delta){
+  const c = state.cart[idx]; if(!c) return;
+  c.qty = Math.max(1, c.qty+delta);
+  render();
+}
+function setCartQtyRaw(idx, v){
+  const c = state.cart[idx]; if(!c) return;
+  const n = parseInt(v,10);
+  c.qty = isNaN(n)||n<1 ? 1 : n;
+  render();
+}
 function removeFromCart(idx){
   state.cart.splice(idx,1);
   render();
@@ -794,13 +811,22 @@ function renderCart(){
           const img = imageFor(p);
           return `
           <div class="citem">
-            <div class="cthumb">${img?`<img src="${img}" alt="${p.name}">`:ICON[p.category]}</div>
-            <div class="cinfo">
-              <div class="cname">${p.name}</div>
-              <div class="cmeta">수량 <b>${c.qty}${p.pack}</b> · 납품일 <b>${c.deliveryDate}</b></div>
-              <div class="cmeta">${money(p.price*c.qty)}원</div>
+            <div class="citem-top">
+              <div class="cthumb" onclick="openDetail(${p.uid})">${img?`<img src="${img}" alt="${p.name}">`:ICON[p.category]}</div>
+              <div class="cinfo">
+                <div class="cname" onclick="openDetail(${p.uid})">${p.name}</div>
+                <div class="cmeta">납품일 <b>${c.deliveryDate}</b></div>
+                <div class="cmeta">${money(p.price*c.qty)}원</div>
+              </div>
+              <div class="cremove-x" onclick="removeFromCart(${idx})">×</div>
             </div>
-            <div class="cremove" onclick="removeFromCart(${idx})">삭제</div>
+            <div class="citem-bottom">
+              <div class="mini-stepper">
+                <button onclick="changeCartQty(${idx},-1)">−</button>
+                <input type="number" min="1" value="${c.qty}" onfocus="this.select()" oninput="setCartQtyRaw(${idx},this.value)">
+                <button onclick="changeCartQty(${idx},1)">+</button>
+              </div>
+            </div>
           </div>`;
         }).join('')}
       </div>
