@@ -544,7 +544,7 @@ function setCartQtyRaw(idx, v){
   const c = state.cart[idx]; if(!c) return;
   const n = parseInt(v,10);
   c.qty = isNaN(n)||n<1 ? 1 : n;
-  render();
+  saveAppState(); // 화면은 다시 그리지 않고 값만 저장 (타이핑 중 키패드 안 닫히게)
 }
 function removeFromCart(idx){
   state.cart.splice(idx,1);
