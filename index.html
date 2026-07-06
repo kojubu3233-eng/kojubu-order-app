@@ -34,7 +34,7 @@
   }
   .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:22px;background:var(--ink);border-radius:0 0 14px 14px;z-index:50;}
 
-  .screen{flex:1;overflow-y:auto;display:flex;flex-direction:column;padding-top:26px;}
+  .screen{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;padding-top:26px;}
   .screen::-webkit-scrollbar{width:0;}
   .screen > *{flex-shrink:0;}
 
@@ -42,8 +42,8 @@
   .wave path{fill:var(--sand);}
 
   .topbar{padding:6px 14px 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:6px;}
-  .brand{font-family:'Noto Serif KR',serif;font-weight:700;font-size:16px;color:var(--navy);letter-spacing:-.01em;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto;}
-  .brand span{color:var(--coral);}
+  .brand{font-family:'Noto Serif KR',serif;font-weight:700;font-size:16px;color:var(--navy);letter-spacing:-.01em;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto;cursor:pointer;}
+  .brand-name span{color:var(--coral);}
   .logo-mark{width:28px;height:28px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
   .logo-mark img{width:100%;height:100%;object-fit:contain;display:block;}
   .social{display:flex;gap:5px;flex:0 0 auto;}
@@ -55,7 +55,9 @@
   .datasrc.loading{background:var(--muted);}
 
   .banner{margin:4px 18px 14px;border-radius:16px;overflow:hidden;position:relative;height:130px;background:linear-gradient(135deg,var(--navy),var(--navy-dim));}
-  .banner-slide{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;justify-content:center;color:#fff;opacity:0;transition:opacity .4s ease;}
+  .banner-slide{position:absolute;inset:0;padding:18px;display:flex;flex-direction:column;justify-content:center;color:#fff;opacity:0;transition:opacity .4s ease;background-size:cover;background-position:center;}
+  .banner-slide.has-img::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(21,53,72,.15),rgba(21,53,72,.75));z-index:0;}
+  .banner-slide.has-img .banner-eyebrow,.banner-slide.has-img .banner-title{position:relative;z-index:1;}
   .banner-slide.active{opacity:1;}
   .banner-eyebrow{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#f3c9bd;font-weight:700;margin-bottom:6px;}
   .banner-title{font-family:'Noto Serif KR',serif;font-size:19px;font-weight:700;line-height:1.3;}
@@ -63,8 +65,9 @@
   .banner-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);cursor:pointer;}
   .banner-dots span.active{background:#fff;}
 
-  .cats{display:flex;gap:7px;padding:0 18px 14px;overflow-x:auto;}
+  .cats{display:flex;gap:7px;padding:0 18px 14px;overflow-x:auto;overflow-y:hidden;max-width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x;scroll-snap-type:x proximity;}
   .cats::-webkit-scrollbar{display:none;}
+  .cats .chip{scroll-snap-align:start;}
   .chip{flex:0 0 auto;padding:7px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;white-space:nowrap;}
   .chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
 
@@ -98,13 +101,19 @@
   .pthumb img{width:100%;height:100%;object-fit:cover;}
   .badge{position:absolute;top:6px;left:6px;background:var(--coral);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;z-index:2;}
   .storagetag{position:absolute;top:6px;right:6px;background:rgba(21,53,72,.82);color:#fff;font-size:8.5px;font-weight:700;padding:2px 6px;border-radius:8px;z-index:2;}
+  .storagetag.tag-best{background:var(--coral);}
+  .storagetag.tag-recommend{background:var(--sage);}
+  .storagetag.tag-default{background:rgba(21,53,72,.82);}
+  .listorage.tag-best{background:var(--coral-dim);color:var(--coral);}
+  .listorage.tag-recommend{background:#e4ecdf;color:var(--sage);}
+  .listorage.tag-default{background:var(--sand);color:var(--navy);}
   .pinfo{padding:9px 10px 11px;}
   .pname{font-size:12.5px;font-weight:700;line-height:1.35;margin-bottom:2px;}
   .pspec{font-size:10.5px;color:var(--muted);margin-bottom:6px;}
   .pprice{font-size:13px;font-weight:900;color:var(--navy);}
   .pprice small{font-weight:500;color:var(--muted);font-size:10px;}
 
-  .navbar{display:flex;border-top:1px solid var(--line);background:#fff;padding:9px 0 12px;}
+  .navbar{display:flex;border-top:1px solid var(--line);background:#fff;padding:9px 0 12px;flex-shrink:0;}
   .navitem{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9.5px;color:var(--muted);cursor:pointer;font-weight:500;}
   .navitem.active{color:var(--coral);font-weight:700;}
   .navitem .ico{font-size:16px;}
@@ -128,7 +137,9 @@
   .stepper{display:flex;align-items:center;gap:0;width:fit-content;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
   .stepper button{width:38px;height:38px;border:none;background:var(--sand);font-size:16px;color:var(--navy);cursor:pointer;font-weight:700;}
   .stepper input{width:52px;height:38px;border:none;text-align:center;font-size:14px;font-weight:700;font-family:inherit;border-left:1px solid var(--line);border-right:1px solid var(--line);}
-  .dateinput{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;color:var(--ink);}
+  .datefield{display:flex;gap:8px;align-items:stretch;}
+  .dateinput{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;color:var(--ink);}
+  .date-pick-btn{flex:0 0 auto;width:42px;border:1px solid var(--line);border-radius:10px;background:var(--sand);font-size:16px;cursor:pointer;}
   .hint{font-size:10.5px;color:var(--muted);margin-top:6px;}
 
   .btnrow{display:flex;gap:8px;padding:6px 18px 18px;margin-top:auto;}
@@ -175,6 +186,12 @@
   .footnote{margin-top:16px;max-width:380px;font-size:11.5px;color:var(--muted);line-height:1.7;text-align:center;}
   .footnote b{color:var(--navy);}
   .search-input{margin:0 18px 12px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;font-size:13px;font-family:inherit;width:calc(100% - 36px);}
+  .search-section{padding:0 18px 20px;}
+  .search-section-title{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:10px;}
+  .search-clear{font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;}
+  .search-chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .search-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;background:var(--sand);color:var(--navy);font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid var(--line);}
+  .search-chip-x{color:var(--muted);font-size:12px;cursor:pointer;padding:0 2px;line-height:1;}
 </style>
 </head>
 <body>
@@ -183,6 +200,7 @@
   <div class="phone">
     <div class="notch"></div>
     <div id="app" class="screen"></div>
+    <div id="navbar-outer"></div>
     <div id="toast" class="toast"></div>
   </div>
   <div class="footnote">결제 없음 · <b>수량 + 납품일</b>을 입력해 발주 요청만 전송하는 구조예요. 상품 데이터·이미지는 구글 스프레드시트/드라이브에서 그대로 가져왔어요. 담당자 즉시 알림과 관리자 페이지는 우측 상단 "관리자" 버튼으로 개념만 미리 볼 수 있어요.</div>
@@ -221,11 +239,21 @@ function storageTag(storage){
   const m = storage.replace('[merged]','').trim();
   return m.split(/[\/\(]/)[0].trim();
 }
+// 뱃지: 스프레드시트 I열(Badge)에 입력한 문구를 그대로 썸네일 우상단에 노출해요.
+// '베스트'/'BEST', '추천'은 전용 색상을 쓰고, 그 외 문구는 기본 색상으로 그대로 표시돼요.
+function badgeInfo(p){
+  const raw = (p.badge ?? p['뱃지'] ?? p['구분'] ?? p.tag ?? '').toString().trim();
+  if(!raw) return null;
+  const up = raw.toUpperCase();
+  if(raw==='베스트' || raw==='베스트메뉴' || up==='BEST') return {text:'BEST', cls:'tag-best'};
+  if(raw==='추천' || raw==='추천메뉴' || up==='RECOMMEND') return {text:'추천', cls:'tag-recommend'};
+  return {text:raw, cls:'tag-default'};
+}
 
 const FALLBACK_PRODUCTS = [
- {uid:1,code:'24992305',name:'코주부가마보꼬',category:'어육가공품',price:7700,storage:'냉장 / 10일',weight:'10g~13g',pack:'1kg',content:'연육 92.74%'},
+ {uid:1,code:'24992305',name:'코주부가마보꼬',category:'어육가공품',price:7700,storage:'냉장 / 10일',weight:'10g~13g',pack:'1kg',content:'연육 92.74%',badge:'베스트'},
  {uid:2,code:'24516105',name:'우리쌀간편종합어묵',category:'어육가공품',price:6500,storage:'냉장 / 10일',weight:'8~13g',pack:'1kg',content:'연육 83.42%'},
- {uid:3,code:'24998308',name:'색동모둠어묵',category:'어육가공품',price:6900,storage:'냉동 / 9개월',weight:'8~13g',pack:'1kg',content:'사각(백색) 92.74%, 원(자색) 92.34%, 볼(녹색) 87.06%, 봉(황색) 83.64%'},
+ {uid:3,code:'24998308',name:'색동모둠어묵',category:'어육가공품',price:6900,storage:'냉동 / 9개월',weight:'8~13g',pack:'1kg',content:'사각(백색) 92.74%, 원(자색) 92.34%, 볼(녹색) 87.06%, 봉(황색) 83.64%',badge:'추천'},
  {uid:4,code:'25004323',name:'칵테일어묵',category:'어육가공품',price:4400,storage:'냉동 / 9개월',weight:'50g',pack:'500g',content:'백색 92.74%, 자색 92.34%, 녹색 87.06%, 황색 83.63%'},
  {uid:5,code:'25004330',name:'우리쌀부들어묵',category:'어육가공품',price:6600,storage:'냉동 / 12개월',weight:'10g~13g',pack:'1kg',content:'연육 83.07%'},
  {uid:6,code:'25004329',name:'우리쌀채어묵',category:'어육가공품',price:6600,storage:'냉장 / 10일',weight:'5mm x 9mm',pack:'1kg',content:'연육 83.95%'},
@@ -260,7 +288,7 @@ const FALLBACK_PRODUCTS = [
  {uid:35,code:'25129474',name:'천연아카시아 꿀간장돼지갈비찜',category:'식육가공품',price:35000,storage:'냉동 / 12개월',weight:'',pack:'3kg',content:'돼지갈비(국내산) 70%, 꿀간장돼지갈비양념 등'},
  {uid:36,code:'25129473',name:'천연아카시아 꿀고추장돼지갈비찜',category:'식육가공품',price:36000,storage:'냉동 / 12개월',weight:'',pack:'3kg',content:'돼지갈비(국내산) 70%, 꿀고추장돼지갈비양념 등'},
  {uid:37,code:'25285300',name:'직접키운돼지불고기(고추장)',category:'식육가공품',price:23500,storage:'냉동 / 12개월',weight:'',pack:'3kg',content:'돼지고기(국내산) 70%, 소스 30% 등'},
- {uid:38,code:'25285299',name:'직접키운돼지불고기(간장)',category:'식육가공품',price:231100,storage:'냉동 / 12개월',weight:'',pack:'3kg',content:'돼지고기(국내산) 70%, 소스 30% 등',priceFlag:true},
+ {uid:38,code:'25285299',name:'직접키운돼지불고기(간장)',category:'식육가공품',price:23100,storage:'냉동 / 12개월',weight:'',pack:'3kg',content:'돼지고기(국내산) 70%, 소스 30% 등'},
  {uid:39,code:'25396059',name:'한약재로 삶은 보쌈수육',category:'식육가공품',price:19900,storage:'냉동 / 12개월',weight:'',pack:'1kg',content:'돼지고기(목전지, 외국산) 93.67%, 참당귀, 천궁뿌리 등'},
  {uid:40,code:'25396060',name:'한약재로 삶은 삼겹수육',category:'식육가공품',price:19900,storage:'냉동 / 12개월',weight:'',pack:'1kg',content:'돼지고기(삼겹살, 외국산) 93.67%, 참당귀, 천궁뿌리 등'},
  {uid:41,code:'25396062',name:'삶아 야들야들한 삼겹동파육',category:'식육가공품',price:20500,storage:'냉동 / 12개월',weight:'',pack:'1kg',content:'돼지고기(삼겹살, 외국산) 61.59%, 동파육 소스 등'},
@@ -317,21 +345,18 @@ const FALLBACK_PRODUCTS = [
  {uid:92,code:'25961455',name:'쫄깃탱글전두부',category:'두부',price:2500,storage:'냉장 / 20일',weight:'',pack:'500g',content:'대두(국내산) 100%'},
  {uid:93,code:'25962795',name:'슬라이스전두부',category:'두부',price:13400,storage:'냉장 / 20일',weight:'5.5g / 56조각',pack:'3kg',content:'대두(국내산) 100%'},
  {uid:94,code:'25955083',name:'단백질 꽉찬 국산콩두부',category:'두부',price:11700,storage:'냉장 / 20일',weight:'',pack:'3kg',content:'대두(국내산) 100%'},
- {uid:95,code:'25853469',name:'플레인크레이프케이크(홀)',category:'기타',price:19800,storage:'냉동 / 9개월 [merged]',weight:'66.5g / 10조각',pack:'665g',content:'가공유크림 50.73%, 전란액 11.21% 등'},
- {uid:96,code:'25853468',name:'플레인크레이프케이크(조각)',category:'기타',price:20900,storage:'냉동 / 9개월 [merged]',weight:'',pack:'66g',content:'가공유크림 50.73%, 전란액 11.21% 등'},
- {uid:97,code:'25853471',name:'초코크레이프케이크(홀)',category:'기타',price:2250,storage:'냉동 / 9개월 [merged]',weight:'72.5g / 10조각',pack:'725g',content:'가공유크림 56.66%, 전란액 10.99%'},
- {uid:98,code:'25853470',name:'초코크레이프케이크(조각)',category:'기타',price:2350,storage:'냉동 / 9개월 [merged]',weight:'',pack:'72g',content:'가공유크림 56.66%, 전란액 10.99%'},
+ {uid:95,code:'25853469',name:'플레인크레이프케이크(홀)',category:'기타',price:19800,storage:'냉동 / 9개월',weight:'66.5g / 10조각',pack:'665g',content:'가공유크림 50.73%, 전란액 11.21% 등'},
+ {uid:96,code:'25853468',name:'플레인크레이프케이크(조각)',category:'기타',price:20900,storage:'냉동 / 9개월',weight:'',pack:'66g',content:'가공유크림 50.73%, 전란액 11.21% 등'},
+ {uid:97,code:'25853471',name:'초코크레이프케이크(홀)',category:'기타',price:2250,storage:'냉동 / 9개월',weight:'72.5g / 10조각',pack:'725g',content:'가공유크림 56.66%, 전란액 10.99%'},
+ {uid:98,code:'25853470',name:'초코크레이프케이크(조각)',category:'기타',price:2350,storage:'냉동 / 9개월',weight:'',pack:'72g',content:'가공유크림 56.66%, 전란액 10.99%'},
  {uid:99,code:'24798721',name:'코주부소세지떡꼬치',category:'기타',price:7480,storage:'냉동 / 9개월',weight:'10꼬치 / 1봉',pack:'85g',content:'소시지 36.47%, 떡 63.53%'},
  {uid:100,code:'25814373',name:'코주부콩식용유',category:'기타',price:41800,storage:'직사광선 받지 않는 실온보관',weight:'16.56kg',pack:'18L',content:'콩기름 99.9999%(외국산: 미국, 파라과이, 아르헨티나 등)'},
 ];
 
-// ===== 구글 시트 실시간 연동 =====
-// Apps Script를 웹앱으로 배포한 뒤 그 URL을 여기에 붙여넣으면 실시간 연동으로 전환돼요.
-// 비어있으면 스냅샷(FALLBACK_PRODUCTS)으로 동작해요.
 const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbyuI2b28nwN4vB74-gv5qjMCWO69-vpy2BgBFgRXsv5EP7qO9mptLYfFfkksiPeR3I/exec';
 
 let PRODUCTS = FALLBACK_PRODUCTS;
-let DATA_SOURCE = 'offline'; // 'live' | 'offline' | 'loading'
+let DATA_SOURCE = 'offline';
 let LAST_ERROR = '';
 
 function fetchOnce_(){
@@ -375,9 +400,22 @@ async function loadProducts(){
 }
 
 const BANNERS = [
-  {eyebrow:'인기', title:'코주부가마보꼬, 이번 달 발주 1위'},
-  {eyebrow:'급식 시즌 준비', title:'국탕류 라인 사전 발주 안내'},
+  {eyebrow:'신제품', title:'프리미엄 어묵', imageId:'11ahsfH7RsjCzTomY3Joqjeu0nFBNfHQW'},
+  {eyebrow:'인기상품', title:'코주부 양념육', imageId:'1kZHvEZ9FR1srY7BVXcGO1zVskCmylnuE'},
 ];
+function extractDriveId_(v){
+  if(!v) return null;
+  const s = String(v).trim();
+  const m1 = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  if(m1) return m1[1];
+  const m2 = s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if(m2) return m2[1];
+  return s;
+}
+function bannerImage(b){
+  const id = extractDriveId_(b.imageId);
+  return id ? ('https://drive.google.com/thumbnail?id='+id+'&sz=w800') : null;
+}
 
 let state = {
   screen:'home',
@@ -389,8 +427,8 @@ let state = {
   cart:[],
   adminLog:[],
   searchTerm:'',
-  viewMode:'grid',   // 'grid' | 'list'
-  pageSize:10,       // 10 | 20 | 30 | 'all'
+  viewMode:'grid',
+  pageSize:10,
   currentPage:1,
 };
 
@@ -434,9 +472,26 @@ function setQtyRaw(v){
   state.qty = isNaN(n)||n<1 ? 1 : n;
 }
 function setDate(v){ state.deliveryDate=v; }
+function openDatePicker(){
+  const h = document.getElementById('dateHidden');
+  if(!h) return;
+  if(h.showPicker){ try{ h.showPicker(); return; }catch(e){} }
+  h.style.left='0px'; h.style.position='relative'; h.click();
+}
+function syncDateFromPicker(v){
+  state.deliveryDate = v;
+  const input = document.getElementById('dateInput');
+  if(input) input.value = v;
+}
+function isValidDate_(v){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(v+'T00:00:00');
+  return !isNaN(d.getTime());
+}
 
 function addToCart(){
-  if(!state.deliveryDate){ showToast('납품일을 선택해주세요','⚠️'); return; }
+  if(!state.deliveryDate){ showToast('납품일을 입력해주세요','⚠️'); return; }
+  if(!isValidDate_(state.deliveryDate)){ showToast('납품일을 YYYY-MM-DD 형식으로 입력해주세요','⚠️'); return; }
   const p = findProduct(state.detailId);
   const existing = state.cart.find(c=>c.productId===p.uid && c.deliveryDate===state.deliveryDate);
   if(existing){ existing.qty += state.qty; }
@@ -473,24 +528,30 @@ function render(){
   else if(state.screen==='search') app.innerHTML = renderSearch();
   else app.innerHTML = renderPlaceholder();
 
+  document.getElementById('navbar-outer').innerHTML = navbar();
+
   if(state.screen==='detail'){
     document.getElementById('qtyInput').value = state.qty;
     document.getElementById('dateInput').value = state.deliveryDate;
+    document.getElementById('dateHidden').value = state.deliveryDate;
+  }
+  if(state.screen==='search'){
+    renderSearchListOnly();
   }
 }
 
 function productCard(p){
   const img = imageFor(p);
+  const b = badgeInfo(p);
   return `
     <div class="pcard" onclick="openDetail(${p.uid})">
       <div class="pthumb">
-        ${p.badge?`<div class="badge">${p.badge}</div>`:''}
-        <div class="storagetag">${storageTag(p.storage)}</div>
+        ${b?`<div class="storagetag ${b.cls}">${b.text}</div>`:''}
         ${img?`<img src="${img}" alt="${p.name}" loading="lazy">`:ICON[p.category]}
       </div>
       <div class="pinfo">
         <div class="pname">${p.name}</div>
-        <div class="pspec">${p.pack}${p.weight?' · '+p.weight:''}</div>
+        <div class="pspec">${p.pack}${storageTag(p.storage)?' · '+storageTag(p.storage):''}</div>
         <div class="pprice">${money(p.price)}<small>원 / ${p.pack}</small></div>
       </div>
     </div>`;
@@ -498,13 +559,14 @@ function productCard(p){
 
 function productListItem(p){
   const img = imageFor(p);
+  const b = badgeInfo(p);
   return `
     <div class="litem" onclick="openDetail(${p.uid})">
       <div class="lithumb">${img?`<img src="${img}" alt="${p.name}" loading="lazy">`:ICON[p.category]}</div>
       <div class="liinfo">
-        <div class="listorage">${storageTag(p.storage)}</div>
+        ${b?`<div class="listorage ${b.cls}">${b.text}</div>`:''}
         <div class="pname">${p.name}</div>
-        <div class="pspec">${p.pack}${p.weight?' · '+p.weight:''}</div>
+        <div class="pspec">${p.pack}${storageTag(p.storage)?' · '+storageTag(p.storage):''}</div>
         <div class="pprice">${money(p.price)}<small>원 / ${p.pack}</small></div>
       </div>
     </div>`;
@@ -534,11 +596,11 @@ function renderHome(){
   const { pageItems, totalPages, page } = paginate(filtered);
   return `
     <div class="topbar">
-      <div class="brand">
+      <div class="brand" onclick="goHome()">
         <div class="logo-mark">
           <img src="${LOGO_SRC}" alt="코주부씨앤에프 로고">
         </div>
-        코주부<span>씨앤에프</span>
+        <span class="brand-name">코주부<span>씨앤에프</span></span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;">
         <div class="datasrc ${DATA_SOURCE}" title="${DATA_SOURCE==='live'?'구글 시트 실시간 연동':DATA_SOURCE==='loading'?'불러오는 중':'샘플(스냅샷) 데이터'}"></div>
@@ -550,11 +612,15 @@ function renderHome(){
     </div>
 
     <div class="banner">
-      ${BANNERS.map((b,i)=>`
-        <div class="banner-slide ${i===state.bannerIdx?'active':''}">
+      ${BANNERS.map((b,i)=>{
+        const bimg = bannerImage(b);
+        const style = bimg ? `style="background-image:url('${bimg}')"` : '';
+        return `
+        <div class="banner-slide ${bimg?'has-img':''} ${i===state.bannerIdx?'active':''}" ${style}>
           <div class="banner-eyebrow">${b.eyebrow}</div>
           <div class="banner-title">${b.title}</div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
       <div class="banner-dots">
         ${BANNERS.map((_,i)=>`<span class="${i===state.bannerIdx?'active':''}" onclick="setBanner(${i})"></span>`).join('')}
       </div>
@@ -588,26 +654,85 @@ function renderHome(){
       ? `<div class="grid">${pageItems.map(productCard).join('')}</div>`
       : `<div class="list">${pageItems.map(productListItem).join('')}</div>`}
     ${paginationBar(totalPages, page)}
-    ${navbar('home')}
   `;
+}
+
+const POPULAR_SEARCHES = ['어묵','갈비','계란말이','두부','순대','새우','국탕'];
+function getRecentSearches(){
+  try{ return JSON.parse(localStorage.getItem('kojubu_recent_searches')||'[]'); }
+  catch(e){ return []; }
+}
+function saveRecentSearch(term){
+  term = (term||'').trim();
+  if(!term) return;
+  let list = getRecentSearches().filter(t=>t!==term);
+  list.unshift(term);
+  list = list.slice(0,8);
+  try{ localStorage.setItem('kojubu_recent_searches', JSON.stringify(list)); }catch(e){}
+}
+function removeRecentSearch(term){
+  const list = getRecentSearches().filter(t=>t!==term);
+  try{ localStorage.setItem('kojubu_recent_searches', JSON.stringify(list)); }catch(e){}
+  renderSearchListOnly();
+}
+function clearRecentSearches(){
+  try{ localStorage.removeItem('kojubu_recent_searches'); }catch(e){}
+  renderSearchListOnly();
+}
+function selectSearchTerm(term){
+  const input = document.querySelector('.search-input');
+  if(input) input.value = term;
+  state.searchTerm = term;
+  saveRecentSearch(term);
+  renderSearchListOnly();
+}
+function submitSearch(term){
+  saveRecentSearch(term);
+  renderSearchListOnly();
 }
 
 function renderSearch(){
   return `
-    <div class="topbar"><div class="brand" style="cursor:pointer" onclick="goHome()">‹ 검색</div><div></div></div>
-    <input class="search-input" placeholder="상품명으로 검색 (예: 어묵, 갈비)" oninput="setSearch(this.value)" autofocus>
-    <div id="searchResults" class="grid"></div>
-    ${navbar('search')}
+    <div class="topbar"><div class="brand" onclick="goHome()">‹ 검색</div><div></div></div>
+    <input class="search-input" placeholder="상품명으로 검색 (예: 어묵, 갈비)" value="${state.searchTerm||''}" oninput="setSearch(this.value)" onkeydown="if(event.key==='Enter'){submitSearch(this.value);}" autofocus>
+    <div id="searchResults"></div>
   `;
 }
 function renderSearchListOnly(){
   const box = document.getElementById('searchResults');
   if(!box) return;
   const term = state.searchTerm.trim();
-  const results = term ? PRODUCTS.filter(p=>p.name.includes(term)) : [];
-  box.innerHTML = term
-    ? (results.length ? results.map(productCard).join('') : '<div class="empty" style="grid-column:1/-1;"><div class="big">🔎</div>검색 결과가 없어요.</div>')
-    : '';
+
+  if(!term){
+    const recent = getRecentSearches();
+    box.className = '';
+    box.innerHTML = `
+      ${recent.length ? `
+      <div class="search-section">
+        <div class="search-section-title"><span>최근 검색어</span><span class="search-clear" onclick="clearRecentSearches()">전체삭제</span></div>
+        <div class="search-chips">
+          ${recent.map(t=>`
+            <div class="search-chip" onclick="selectSearchTerm('${t.replace(/'/g,"\\'")}')">
+              <span>${t}</span>
+              <span class="search-chip-x" onclick="event.stopPropagation();removeRecentSearch('${t.replace(/'/g,"\\'")}')">×</span>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+      <div class="search-section">
+        <div class="search-section-title"><span>추천 검색어</span></div>
+        <div class="search-chips">
+          ${POPULAR_SEARCHES.map(t=>`<div class="search-chip" onclick="selectSearchTerm('${t}')">${t}</div>`).join('')}
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const results = PRODUCTS.filter(p=>p.name.includes(term));
+  box.className = 'grid';
+  box.innerHTML = results.length
+    ? results.map(productCard).join('')
+    : '<div class="empty" style="grid-column:1/-1;"><div class="big">🔎</div>검색 결과가 없어요.</div>';
 }
 
 function renderDetail(){
@@ -629,15 +754,19 @@ function renderDetail(){
         <label>수량</label>
         <div class="stepper">
           <button onclick="changeQty(-1)">−</button>
-          <input id="qtyInput" type="number" min="1" oninput="setQtyRaw(this.value)">
+          <input id="qtyInput" type="number" min="1" oninput="setQtyRaw(this.value)" onfocus="this.select()">
           <button onclick="changeQty(1)">+</button>
         </div>
       </div>
 
       <div class="field">
         <label>납품 희망일</label>
-        <input id="dateInput" class="dateinput" type="date" min="${tomorrow()}" onchange="setDate(this.value)">
-        <div class="hint">급발주인 경우에도 정확한 납품일을 입력해주세요.</div>
+        <div class="datefield">
+          <input id="dateInput" class="dateinput" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" onfocus="this.select()" oninput="setDate(this.value)">
+          <button type="button" class="date-pick-btn" onclick="openDatePicker()">📅</button>
+          <input id="dateHidden" type="date" style="position:absolute;left:-9999px;" min="${tomorrow()}" onchange="syncDateFromPicker(this.value)">
+        </div>
+        <div class="hint">YYYY-MM-DD로 직접 입력하거나 📅 버튼으로 달력에서 골라도 돼요. 급발주인 경우에도 정확한 납품일을 입력해주세요.</div>
       </div>
     </div>
     <div class="btnrow">
@@ -650,7 +779,7 @@ function renderDetail(){
 function renderCart(){
   return `
     <div class="topbar">
-      <div class="brand" style="cursor:pointer" onclick="goHome()">‹ 장바구니</div>
+      <div class="brand" onclick="goHome()">‹ 장바구니</div>
       <div style="width:20px;"></div>
     </div>
     ${state.cart.length===0 ? `
@@ -676,7 +805,6 @@ function renderCart(){
         }).join('')}
       </div>
     `}
-    ${navbar('cart')}
     ${state.cart.length>0 ? `
       <div class="cart-summary">
         <div class="sumrow"><span>총 품목</span><span>${state.cart.length}건 · ${cartTotalQty()}개</span></div>
@@ -690,7 +818,7 @@ function renderCart(){
 function renderAdmin(){
   return `
     <div class="admin-header">
-      <div class="admin-title" style="cursor:pointer" onclick="goHome()">‹ 관리자 페이지 (개념 미리보기)</div>
+      <div class="admin-title" onclick="goHome()" style="cursor:pointer;">‹ 관리자 페이지 (개념 미리보기)</div>
       <div class="admin-sub">발주 요청이 들어오면 담당자에게 즉시 알림 + 이 목록에 자동 반영될 예정이에요.</div>
     </div>
     ${state.adminLog.length===0 ? `
@@ -719,17 +847,17 @@ function renderAdmin(){
 
 function renderPlaceholder(){
   return `
-    <div class="topbar"><div class="brand" style="cursor:pointer" onclick="goHome()">‹ 홈으로</div><div></div></div>
+    <div class="topbar"><div class="brand" onclick="goHome()">‹ 홈으로</div><div></div></div>
     <div class="placeholder">
       <div class="big">🛠️</div>
       <div class="t">다음 단계에서 만들 화면이에요</div>
       <div class="d">마이페이지는 핵심 발주 흐름을 먼저 다진 뒤에 이어서 붙이기로 했어요.</div>
     </div>
-    ${navbar('placeholder')}
   `;
 }
 
-function navbar(active){
+function navbar(){
+  const active = state.screen==='placeholder' ? 'my' : state.screen;
   const items = [
     {key:'home', ico:'🏠', label:'홈', onClick:'goHome()'},
     {key:'search', ico:'🔍', label:'검색', onClick:'goSearch()'},
