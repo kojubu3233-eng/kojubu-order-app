@@ -647,7 +647,7 @@ function removeFromCart(idx){
   state.cart.splice(idx,1);
   render();
 }
-function submitOrder(){
+async function submitOrder(){
   if(state.cart.length===0) return;
   if(!state.currentUser){
     state.screenBeforeAuth = 'cart';
@@ -658,15 +658,44 @@ function submitOrder(){
   }
   const now = new Date();
   const timeLabel = now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-  state.cart.forEach(c=>{
+  const orderItems = state.cart.map(c=>{
     const p = findProduct(c.productId);
+    return { name:p.name, code:p.code, qty:c.qty, deliveryDate:c.deliveryDate, price:p.price*c.qty };
+  });
+  orderItems.forEach(item=>{
     state.adminLog.unshift({
-      name:p.name, qty:c.qty, deliveryDate:c.deliveryDate, price:p.price*c.qty, time:timeLabel, status:'신규'
+      name:item.name, qty:item.qty, deliveryDate:item.deliveryDate, price:item.price, time:timeLabel, status:'신규'
     });
   });
   state.cart = [];
   showToast('발주 요청 전송 완료 · 담당자 알림 발송됨','🔔');
   state.screen='home';
+  render();
+
+  // 실제 스프레드시트에도 기록 시도 (실패해도 화면 흐름/로컬 기록은 그대로 유지)
+  if(SHEET_API_URL){
+    try{
+      await fetch(SHEET_API_URL, {
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // CORS 프리플라이트 회피용
+        body: JSON.stringify({
+          org: (state.currentUser && state.currentUser.displayName) || '',
+          email: (state.currentUser && state.currentUser.email) || '',
+          items: orderItems,
+        })
+      });
+    }catch(err){
+      console.error('스프레드시트 기록 실패 (로컬 관리자 목록에는 정상 반영됨):', err);
+    }
+  }
+}
+
+function removeAdminLog(idx){
+  state.adminLog.splice(idx,1);
+  render();
+}
+function clearAdminLog(){
+  state.adminLog = [];
   render();
 }
 
@@ -984,6 +1013,7 @@ function renderAdmin(){
     <div class="admin-header">
       <div class="admin-title" onclick="goHome()" style="cursor:pointer;">‹ 관리자 페이지 (개념 미리보기)</div>
       <div class="admin-sub">발주 요청이 들어오면 담당자에게 즉시 알림 + 이 목록에 자동 반영될 예정이에요.</div>
+      ${state.adminLog.length>0 ? `<div class="search-clear" style="margin-top:8px;cursor:pointer;" onclick="clearAdminLog()">전체 삭제</div>` : ''}
     </div>
     ${state.adminLog.length===0 ? `
       <div class="empty">
@@ -992,11 +1022,14 @@ function renderAdmin(){
       </div>
     ` : `
       <div class="alist">
-        ${state.adminLog.map(a=>`
+        ${state.adminLog.map((a,idx)=>`
           <div class="aitem">
             <div class="arow1">
               <div class="aname">${a.name}</div>
-              <div class="astatus">${a.status}</div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div class="astatus">${a.status}</div>
+                <div class="cremove-x" onclick="removeAdminLog(${idx})">×</div>
+              </div>
             </div>
             <div class="adetail">
               수량 <b>${a.qty}</b> · 납품일 <b>${a.deliveryDate}</b> · 금액 <b>${money(a.price)}원</b><br>
@@ -1056,7 +1089,7 @@ function renderAuth(){
         <input id="authPassword" type="password" placeholder="6자 이상" onkeydown="if(event.key==='Enter'){submitAuthForm()}">
       </div>
 
-      <button class="btn btn-solid btn-full" style="margin-top:6px;" onclick="submitAuthForm()" ${state.authBusy?'disabled':''}>
+      <button class="btn btn-solid btn-full" style="margin-top:6px;flex:none;" onclick="submitAuthForm()" ${state.authBusy?'disabled':''}>
         ${state.authBusy ? '처리 중...' : (isSignup ? '가입하기' : '로그인')}
       </button>
 
