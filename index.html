@@ -70,8 +70,7 @@
   .banner-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);cursor:pointer;}
   .banner-dots span.active{background:#fff;}
 
-  .cats{display:flex;flex-wrap:nowrap;align-items:center;gap:7px;padding:0 18px 14px;box-sizing:border-box;width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-  .cats::-webkit-scrollbar{display:none;}
+  .cats{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:7px;padding:0 18px 14px;box-sizing:border-box;width:100%;}
   .chip{flex:0 0 auto;padding:7px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;white-space:nowrap;}
   .chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
 
@@ -143,7 +142,12 @@
   .stepper input{width:52px;height:38px;border:none;text-align:center;font-size:14px;font-weight:700;font-family:inherit;border-left:1px solid var(--line);border-right:1px solid var(--line);}
   .datefield{display:flex;gap:8px;align-items:stretch;}
   .dateinput{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;color:var(--ink);}
-  .date-pick-btn{flex:0 0 auto;width:42px;border:1px solid var(--line);border-radius:10px;background:var(--sand);font-size:16px;cursor:pointer;}
+  .date-pick-wrap{position:relative;flex:0 0 auto;width:42px;height:42px;}
+  .date-pick-btn{width:42px;height:42px;border:1px solid var(--line);border-radius:10px;background:var(--sand);font-size:16px;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+  .date-pick-native{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:none;padding:0;margin:0;cursor:pointer;}
+  .dateinput{height:42px;}
+  .timerow{display:flex;gap:8px;}
+  .timeselect{flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;color:var(--ink);background:#fff;height:42px;}
   .hint{font-size:10.5px;color:var(--muted);margin-top:6px;}
 
   .btnrow{display:flex;gap:8px;padding:6px 18px 18px;margin-top:auto;}
@@ -571,6 +575,8 @@ let state = {
   detailId:null,
   qty:1,
   deliveryDate:'',
+  deliveryPeriod:'AM',
+  deliveryHour:6,
   cart:[],
   adminLog:[],
   searchTerm:'',
@@ -624,6 +630,8 @@ function loadAppState(){
     if(state.screen==='detail'){
       state.qty = 1;
       state.deliveryDate = tomorrow();
+      state.deliveryPeriod = 'AM';
+      state.deliveryHour = 6;
     }
   }catch(e){ /* 저장된 값이 깨졌으면 무시하고 기본값 사용 */ }
 }
@@ -694,6 +702,7 @@ function refreshAdminBadge(){
 function goSearch(){ state.screen='search'; state.searchTerm=''; render(); }
 function openDetail(uid){
   state.screen='detail'; state.detailId=uid; state.qty=1; state.deliveryDate=tomorrow();
+  state.deliveryPeriod='AM'; state.deliveryHour=6;
   render();
 }
 function setCat(c){ state.activeCat=c; state.currentPage=1; render(); }
@@ -712,12 +721,6 @@ function setQtyRaw(v){
   state.qty = isNaN(n)||n<1 ? 1 : n;
 }
 function setDate(v){ state.deliveryDate=v; }
-function openDatePicker(){
-  const h = document.getElementById('dateHidden');
-  if(!h) return;
-  if(h.showPicker){ try{ h.showPicker(); return; }catch(e){} }
-  h.style.left='0px'; h.style.position='relative'; h.click();
-}
 function syncDateFromPicker(v){
   state.deliveryDate = v;
   const input = document.getElementById('dateInput');
@@ -728,15 +731,52 @@ function isValidDate_(v){
   const d = new Date(v+'T00:00:00');
   return !isNaN(d.getTime());
 }
+function setPeriod(v){ state.deliveryPeriod = v; }
+function setHour(v){
+  const n = parseInt(v,10);
+  state.deliveryHour = isNaN(n) ? 6 : n;
+}
+// "AM06:00" 같은 짧은 시간 라벨
+function deliveryTimeLabel(period, hour){
+  const p = period || 'AM';
+  const h = String(hour || 6).padStart(2,'0');
+  return `${p}${h}:00`;
+}
+// "2026.7.9 AM06:00까지" 같은 간소화된 표시용 라벨. 날짜 파싱에 실패하면 원본 문자열을 그대로 보여줘요.
+function deliveryFullLabel(dateStr, period, hour){
+  if(!dateStr) return '';
+  let d;
+  if(/^\d{4}-\d{2}-\d{2}/.test(dateStr)) d = new Date(dateStr.slice(0,10)+'T00:00:00');
+  else d = new Date(dateStr);
+  if(!d || isNaN(d.getTime())) return `${dateStr} ${deliveryTimeLabel(period,hour)}까지`;
+  return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${deliveryTimeLabel(period,hour)}까지`;
+}
+// 관리자 페이지: 스프레드시트에서 온 원본 날짜 문자열(긴 GMT 형식 등)도 간소화해서 표시
+function formatAdminDeliveryLabel(a){
+  const raw = a.deliveryDate;
+  let d;
+  if(raw && /^\d{4}-\d{2}-\d{2}/.test(raw)) d = new Date(raw.slice(0,10)+'T00:00:00');
+  else if(raw) d = new Date(raw);
+  const dateLabel = (d && !isNaN(d.getTime())) ? `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}` : (raw||'');
+  const timeLabel = a.deliveryTime || deliveryTimeLabel('AM',6);
+  return `${dateLabel} ${timeLabel}까지`;
+}
 
 function addToCart(){
   if(!state.deliveryDate){ showToast('납품일을 입력해주세요','⚠️'); return; }
   if(!isValidDate_(state.deliveryDate)){ showToast('납품일을 YYYY-MM-DD 형식으로 입력해주세요','⚠️'); return; }
   const p = findProduct(state.detailId);
-  const existing = state.cart.find(c=>c.productId===p.uid && c.deliveryDate===state.deliveryDate);
+  const existing = state.cart.find(c=>c.productId===p.uid && c.deliveryDate===state.deliveryDate && (c.deliveryPeriod||'AM')===state.deliveryPeriod && (c.deliveryHour||6)===state.deliveryHour);
   if(existing){ existing.qty += state.qty; }
-  else { state.cart.push({productId:p.uid, qty:state.qty, deliveryDate:state.deliveryDate}); }
+  else { state.cart.push({productId:p.uid, qty:state.qty, deliveryDate:state.deliveryDate, deliveryPeriod:state.deliveryPeriod, deliveryHour:state.deliveryHour}); }
   showToast(p.name+' 장바구니에 담았어요','🛒');
+  render();
+}
+function clearCart(){
+  if(state.cart.length===0) return;
+  if(!confirm('장바구니에 담긴 상품을 모두 삭제할까요?')) return;
+  state.cart = [];
+  showToast('장바구니를 비웠어요','🧺');
   render();
 }
 function changeCartQty(idx, delta){
@@ -776,11 +816,12 @@ async function confirmSubmitOrder(){
   const timeLabel = now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   const orderItems = state.cart.map(c=>{
     const p = findProduct(c.productId);
-    return { name:p.name, code:p.code, qty:c.qty, deliveryDate:c.deliveryDate, price:p.price*c.qty };
+    const deliveryTime = deliveryTimeLabel(c.deliveryPeriod||'AM', c.deliveryHour||6);
+    return { name:p.name, code:p.code, qty:c.qty, deliveryDate:c.deliveryDate, deliveryTime, price:p.price*c.qty };
   });
   orderItems.forEach(item=>{
     state.adminLog.unshift({
-      name:item.name, qty:item.qty, deliveryDate:item.deliveryDate, price:item.price, time:timeLabel, status:'신규'
+      name:item.name, qty:item.qty, deliveryDate:item.deliveryDate, deliveryTime:item.deliveryTime, price:item.price, time:timeLabel, status:'신규'
     });
   });
   state.cart = [];
@@ -843,7 +884,7 @@ function renderOrderConfirmModal(){
             <div class="order-modal-item">
               <div>
                 <div class="order-modal-item-name">${p.name}</div>
-                <div class="order-modal-item-meta">납품일 ${c.deliveryDate}</div>
+                <div class="order-modal-item-meta">납품 ${deliveryFullLabel(c.deliveryDate, c.deliveryPeriod||'AM', c.deliveryHour||6)}</div>
               </div>
               <div class="order-modal-item-qty">${c.qty}개</div>
             </div>`;
@@ -976,7 +1017,6 @@ function renderHome(){
 
     <div class="cats">
       ${CATEGORIES.map(c=>`<div class="chip ${c===state.activeCat?'active':''}" onclick="setCat('${c}')">${c}</div>`).join('')}
-      <div style="flex:0 0 8px;"></div>
     </div>
 
     <svg class="wave" viewBox="0 0 400 10" preserveAspectRatio="none"><path d="M0,5 Q20,0 40,5 T80,5 T120,5 T160,5 T200,5 T240,5 T280,5 T320,5 T360,5 T400,5 V10 H0 Z"></path></svg>
@@ -1112,10 +1152,26 @@ function renderDetail(){
         <label>납품 희망일</label>
         <div class="datefield">
           <input id="dateInput" class="dateinput" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" onfocus="this.select()" oninput="setDate(this.value)">
-          <button type="button" class="date-pick-btn" onclick="openDatePicker()">📅</button>
-          <input id="dateHidden" type="date" style="position:absolute;left:-9999px;" min="${tomorrow()}" onchange="syncDateFromPicker(this.value)">
+          <div class="date-pick-wrap">
+            <div class="date-pick-btn">📅</div>
+            <input id="dateHidden" class="date-pick-native" type="date" min="${tomorrow()}" onchange="syncDateFromPicker(this.value)">
+          </div>
         </div>
-        <div class="hint">YYYY-MM-DD로 직접 입력하거나 📅 버튼으로 달력에서 골라도 돼요. 급발주인 경우에도 정확한 납품일을 입력해주세요.</div>
+        <div class="hint">YYYY-MM-DD로 직접 입력하거나 📅 버튼을 눌러 달력에서 골라도 돼요. 급발주인 경우에도 정확한 납품일을 입력해주세요.</div>
+      </div>
+
+      <div class="field">
+        <label>납품 희망 시간</label>
+        <div class="timerow">
+          <select class="timeselect" onchange="setPeriod(this.value)">
+            <option value="AM" ${state.deliveryPeriod==='AM'?'selected':''}>오전 (AM)</option>
+            <option value="PM" ${state.deliveryPeriod==='PM'?'selected':''}>오후 (PM)</option>
+          </select>
+          <select class="timeselect" onchange="setHour(this.value)">
+            ${Array.from({length:12},(_,i)=>i+1).map(h=>`<option value="${h}" ${state.deliveryHour===h?'selected':''}>${h}시</option>`).join('')}
+          </select>
+        </div>
+        <div class="hint">기본값은 오전 6시예요. 다른 시간을 원하시면 직접 선택해주세요. (예: ${deliveryTimeLabel(state.deliveryPeriod,state.deliveryHour)}까지)</div>
       </div>
     </div>
     <div class="btnrow">
@@ -1129,7 +1185,7 @@ function renderCart(){
   return `
     <div class="topbar">
       <div class="brand" onclick="goHome()">‹ 장바구니</div>
-      <div style="width:20px;"></div>
+      ${state.cart.length>0 ? `<div class="search-clear" style="cursor:pointer;" onclick="clearCart()">전체삭제</div>` : `<div style="width:20px;"></div>`}
     </div>
     ${state.cart.length===0 ? `
       <div class="empty">
@@ -1147,7 +1203,7 @@ function renderCart(){
               <div class="cthumb" onclick="openDetail(${p.uid})">${img?`<img src="${img}" alt="${p.name}">`:ICON[p.category]}</div>
               <div class="cinfo">
                 <div class="cname" onclick="openDetail(${p.uid})">${p.name}</div>
-                <div class="cmeta">납품일 <b>${c.deliveryDate}</b></div>
+                <div class="cmeta">납품 <b>${deliveryFullLabel(c.deliveryDate, c.deliveryPeriod||'AM', c.deliveryHour||6)}</b></div>
                 <div class="cmeta">${money(p.price*c.qty)}원</div>
               </div>
               <div class="cremove-x" onclick="removeFromCart(${idx})">×</div>
@@ -1208,7 +1264,7 @@ function renderAdmin(){
             </div>
             <div class="adetail">
               <b>${a.org || '기관 미상'}</b> · ${a.email}<br>
-              수량 <b>${a.qty}</b> · 납품일 <b>${a.deliveryDate}</b> · 금액 <b>${money(a.price)}원</b><br>
+              수량 <b>${a.qty}</b> · 납품 <b>${formatAdminDeliveryLabel(a)}</b> · 금액 <b>${money(a.price)}원</b><br>
               접수 시각 ${a.time}
             </div>
           </div>
