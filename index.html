@@ -67,7 +67,7 @@
   .banner-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);cursor:pointer;}
   .banner-dots span.active{background:#fff;}
 
-  .cats{display:flex;gap:7px;padding:0 18px 14px;overflow-x:auto;overflow-y:hidden;max-width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x;scroll-snap-type:x proximity;}
+  .cats{display:flex;align-items:center;gap:7px;padding:0 18px 14px;overflow-x:auto;overflow-y:hidden;max-width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x;scroll-snap-type:x proximity;}
   .cats::-webkit-scrollbar{display:none;}
   .cats .chip{scroll-snap-align:start;}
   .chip{flex:0 0 auto;padding:7px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;white-space:nowrap;}
@@ -533,6 +533,10 @@ let state = {
   authBusy:false,
   currentUser:null,
   isAdmin:false,
+  remoteOrders:[],
+  ordersLoading:false,
+  ordersError:false,
+  pendingOrderCount:0,
 };
 
 function money(n){ return n.toLocaleString('ko-KR'); }
@@ -583,7 +587,59 @@ function showToast(msg, icon){
 
 function goHome(){ state.screen='home'; render(); }
 function goCart(){ state.screen='cart'; render(); }
-function goAdmin(){ state.screen='admin'; render(); }
+function goAdmin(){
+  state.screen='admin';
+  state.ordersLoading = true;
+  state.ordersError = false;
+  render();
+  loadOrdersFromSheet_().then(list=>{
+    state.remoteOrders = applyDismissed_(list);
+    state.pendingOrderCount = state.remoteOrders.filter(o=>o.status==='신규').length;
+    state.ordersLoading = false;
+    render();
+  }).catch(err=>{
+    console.error('발주 목록 조회 실패:', err);
+    state.ordersLoading = false;
+    state.ordersError = true;
+    render();
+  });
+}
+
+function loadOrdersFromSheet_(){
+  if(!SHEET_API_URL) return Promise.resolve([]);
+  const url = SHEET_API_URL + '?action=orders&_ts=' + Date.now();
+  return fetch(url, { cache:'no-store' }).then(res=>{
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
+  }).then(data=> data.orders || []);
+}
+
+const DISMISSED_KEY = 'kojubu_dismissed_orders';
+function getDismissedIds_(){
+  try{ return JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]'); }catch(e){ return []; }
+}
+function addDismissedId_(id){
+  const list = getDismissedIds_();
+  if(!list.includes(id)) list.push(id);
+  try{ localStorage.setItem(DISMISSED_KEY, JSON.stringify(list)); }catch(e){}
+}
+function clearDismissedIds_(){
+  try{ localStorage.removeItem(DISMISSED_KEY); }catch(e){}
+}
+function applyDismissed_(list){
+  const dismissed = getDismissedIds_();
+  return list.filter(o=>!dismissed.includes(o.id));
+}
+
+// 관리자 알림 배지(상단 "관리자" 옆 숫자) 갱신 — 관리자 계정일 때만 주기적으로 확인
+function refreshAdminBadge(){
+  if(!state.isAdmin || !SHEET_API_URL) return;
+  loadOrdersFromSheet_().then(list=>{
+    const visible = applyDismissed_(list);
+    state.pendingOrderCount = visible.filter(o=>o.status==='신규').length;
+    render();
+  }).catch(()=>{ /* 배지 갱신 실패는 조용히 무시 */ });
+}
 function goSearch(){ state.screen='search'; state.searchTerm=''; render(); }
 function openDetail(uid){
   state.screen='detail'; state.detailId=uid; state.qty=1; state.deliveryDate=tomorrow();
@@ -675,7 +731,7 @@ async function submitOrder(){
   // 실제 스프레드시트에도 기록 시도 (실패해도 화면 흐름/로컬 기록은 그대로 유지)
   if(SHEET_API_URL){
     try{
-      await fetch(SHEET_API_URL, {
+      const res = await fetch(SHEET_API_URL, {
         method:'POST',
         headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // CORS 프리플라이트 회피용
         body: JSON.stringify({
@@ -684,18 +740,28 @@ async function submitOrder(){
           items: orderItems,
         })
       });
+      const data = await res.json();
+      if(!data || data.ok===false){
+        console.error('스프레드시트 기록 실패 응답:', data);
+        showToast('⚠️ 시트 기록에 실패했어요. Apps Script 재배포를 확인해주세요','⚠️');
+      }
     }catch(err){
-      console.error('스프레드시트 기록 실패 (로컬 관리자 목록에는 정상 반영됨):', err);
+      console.error('스프레드시트 기록 실패 (네트워크/CORS):', err);
+      showToast('⚠️ 시트 기록에 실패했어요. Apps Script 재배포를 확인해주세요','⚠️');
     }
   }
 }
 
 function removeAdminLog(idx){
-  state.adminLog.splice(idx,1);
+  const o = state.remoteOrders[idx];
+  if(!o) return;
+  addDismissedId_(o.id);
+  state.remoteOrders.splice(idx,1);
   render();
 }
 function clearAdminLog(){
-  state.adminLog = [];
+  state.remoteOrders.forEach(o=>addDismissedId_(o.id));
+  state.remoteOrders = [];
   render();
 }
 
@@ -791,7 +857,7 @@ function renderHome(){
         <div class="social">
           <a href="https://blog.naver.com/kojubu_2000510" target="_blank" rel="noopener" title="네이버블로그">N</a><a href="https://www.instagram.com/_kojubufood?igsh=MXdoeHl4aTUxMDgwaQ==" target="_blank" rel="noopener" title="인스타그램">IG</a><a href="https://pf.kakao.com/_btYsG/" target="_blank" rel="noopener" title="카카오톡 채널">K</a>
         </div>
-        ${state.isAdmin ? `<div class="admin-link" onclick="goAdmin()">관리자</div>` : ''}
+        ${state.isAdmin ? `<div class="admin-link" onclick="goAdmin()" style="position:relative;">관리자${state.pendingOrderCount>0?`<span style="position:absolute;top:-6px;right:-6px;background:var(--coral);color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${state.pendingOrderCount>9?'9+':state.pendingOrderCount}</span>`:''}</div>` : ''}
       </div>
     </div>
 
@@ -1011,18 +1077,28 @@ function renderCart(){
 function renderAdmin(){
   return `
     <div class="admin-header">
-      <div class="admin-title" onclick="goHome()" style="cursor:pointer;">‹ 관리자 페이지 (개념 미리보기)</div>
-      <div class="admin-sub">발주 요청이 들어오면 담당자에게 즉시 알림 + 이 목록에 자동 반영될 예정이에요.</div>
-      ${state.adminLog.length>0 ? `<div class="search-clear" style="margin-top:8px;cursor:pointer;" onclick="clearAdminLog()">전체 삭제</div>` : ''}
+      <div class="admin-title" onclick="goHome()" style="cursor:pointer;">‹ 관리자 페이지</div>
+      <div class="admin-sub">모든 기기에서 들어온 발주 요청을 스프레드시트에서 실시간으로 불러와요. (여기서 삭제해도 시트 원본은 그대로 남아요)</div>
+      <div style="display:flex;gap:14px;margin-top:8px;">
+        <div class="search-clear" style="cursor:pointer;" onclick="goAdmin()">🔄 새로고침</div>
+        ${state.remoteOrders.length>0 ? `<div class="search-clear" style="cursor:pointer;" onclick="clearAdminLog()">화면에서 전체 지우기</div>` : ''}
+      </div>
     </div>
-    ${state.adminLog.length===0 ? `
+    ${state.ordersLoading ? `
+      <div class="empty"><div class="big">⏳</div>불러오는 중...</div>
+    ` : state.ordersError ? `
+      <div class="empty">
+        <div class="big">⚠️</div>
+        발주 목록을 불러오지 못했어요.<br>Apps Script가 최신 코드로 재배포됐는지 확인해주세요.
+      </div>
+    ` : state.remoteOrders.length===0 ? `
       <div class="empty">
         <div class="big">📋</div>
-        아직 접수된 발주 요청이 없어요.<br>홈에서 상품을 담아 요청을 보내보세요.
+        아직 접수된 발주 요청이 없어요.
       </div>
     ` : `
       <div class="alist">
-        ${state.adminLog.map((a,idx)=>`
+        ${state.remoteOrders.map((a,idx)=>`
           <div class="aitem">
             <div class="arow1">
               <div class="aname">${a.name}</div>
@@ -1032,6 +1108,7 @@ function renderAdmin(){
               </div>
             </div>
             <div class="adetail">
+              <b>${a.org || '기관 미상'}</b> · ${a.email}<br>
               수량 <b>${a.qty}</b> · 납품일 <b>${a.deliveryDate}</b> · 금액 <b>${money(a.price)}원</b><br>
               접수 시각 ${a.time}
             </div>
@@ -1150,7 +1227,7 @@ function navbar(){
     <div class="navbar">
       ${items.map(it=>{
         const isCart = it.key==='cart';
-        const count = cartTotalQty();
+        const count = state.cart.length;
         return `
         <div class="navitem ${active===it.key?'active':''}" onclick="${it.onClick}">
           <div class="ico ${isCart?'cart-count':''}">${it.ico}${isCart&&count>0?`<span class="dot">${count}</span>`:''}</div>
@@ -1179,9 +1256,17 @@ if(firebaseReady){
         state.screen = state.screenBeforeAuth || 'home';
         showToast('로그인됐어요','✅');
       }
+      if(state.isAdmin){
+        refreshAdminBadge();
+        if(!window.__adminBadgeTimer){
+          window.__adminBadgeTimer = setInterval(refreshAdminBadge, 30000); // 30초마다 새 발주 확인
+        }
+      }
     }else{
       state.currentUser = null;
       state.isAdmin = false;
+      state.pendingOrderCount = 0;
+      if(window.__adminBadgeTimer){ clearInterval(window.__adminBadgeTimer); window.__adminBadgeTimer = null; }
     }
     state.authBusy = false;
     render();
