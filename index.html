@@ -70,7 +70,8 @@
   .banner-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);cursor:pointer;}
   .banner-dots span.active{background:#fff;}
 
-  .cats{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:7px;padding:0 18px 14px;box-sizing:border-box;width:100%;}
+  .cats{display:flex;flex-wrap:nowrap;align-items:center;gap:7px;padding:0 18px 14px;box-sizing:border-box;width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .cats::-webkit-scrollbar{display:none;}
   .chip{flex:0 0 auto;padding:7px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;white-space:nowrap;}
   .chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
 
@@ -1017,6 +1018,7 @@ function renderHome(){
 
     <div class="cats">
       ${CATEGORIES.map(c=>`<div class="chip ${c===state.activeCat?'active':''}" onclick="setCat('${c}')">${c}</div>`).join('')}
+      <div style="flex:0 0 8px;"></div>
     </div>
 
     <svg class="wave" viewBox="0 0 400 10" preserveAspectRatio="none"><path d="M0,5 Q20,0 40,5 T80,5 T120,5 T160,5 T200,5 T240,5 T280,5 T320,5 T360,5 T400,5 V10 H0 Z"></path></svg>
