@@ -620,6 +620,7 @@ let state = {
   myOrders:[],
   myOrdersLoading:false,
   myOrdersError:false,
+  selectedMyOrderIds:[],
 };
 
 function money(n){ return n.toLocaleString('ko-KR'); }
@@ -720,6 +721,21 @@ function applyDismissed_(list){
   return list.filter(o=>!dismissed.includes(o.id));
 }
 
+// 마이페이지(내 발주 현황)에서 "삭제"는 실제 시트가 아니라 이 기기 화면에서만 숨기는 거예요.
+const MY_DISMISSED_KEY = 'kojubu_dismissed_my_orders';
+function getMyDismissedIds_(){
+  try{ return JSON.parse(localStorage.getItem(MY_DISMISSED_KEY) || '[]'); }catch(e){ return []; }
+}
+function addMyDismissedId_(id){
+  const list = getMyDismissedIds_();
+  if(!list.includes(id)) list.push(id);
+  try{ localStorage.setItem(MY_DISMISSED_KEY, JSON.stringify(list)); }catch(e){}
+}
+function applyMyDismissed_(list){
+  const dismissed = getMyDismissedIds_();
+  return list.filter(o=>!dismissed.includes(o.id));
+}
+
 // 관리자 알림 배지(상단 "관리자" 옆 숫자) 갱신 — 관리자 계정일 때만 주기적으로 확인
 function refreshAdminBadge(){
   if(!state.isAdmin || !SHEET_API_URL) return;
@@ -733,13 +749,19 @@ function goSearch(){ state.screen='search'; state.searchTerm=''; render(); }
 function goAccount(){
   state.screen='account';
   render();
+}
+function goMyOrders(){
+  state.screen='myorders';
+  state.selectedMyOrderIds = [];
+  render();
   if(!state.currentUser) return;
   state.myOrdersLoading = true;
   state.myOrdersError = false;
   render();
   loadOrdersFromSheet_().then(list=>{
     const email = state.currentUser.email;
-    state.myOrders = list.filter(o=>o.email===email);
+    const mine = list.filter(o=>o.email===email);
+    state.myOrders = applyMyDismissed_(mine);
     state.myOrdersLoading = false;
     render();
   }).catch(err=>{
@@ -748,6 +770,40 @@ function goAccount(){
     state.myOrdersError = true;
     render();
   });
+}
+function toggleMyOrderSelect(id, checked){
+  if(checked){ if(!state.selectedMyOrderIds.includes(id)) state.selectedMyOrderIds.push(id); }
+  else{ state.selectedMyOrderIds = state.selectedMyOrderIds.filter(x=>x!==id); }
+  render();
+}
+function toggleSelectAllMyOrders(checked){
+  state.selectedMyOrderIds = checked ? state.myOrders.map(o=>o.id) : [];
+  render();
+}
+function removeMyOrder(id){
+  addMyDismissedId_(id);
+  state.myOrders = state.myOrders.filter(o=>o.id!==id);
+  state.selectedMyOrderIds = state.selectedMyOrderIds.filter(x=>x!==id);
+  showToast('삭제했어요','🗑️');
+  render();
+}
+function removeSelectedMyOrders(){
+  if(state.selectedMyOrderIds.length===0) return;
+  state.selectedMyOrderIds.forEach(id=>addMyDismissedId_(id));
+  state.myOrders = state.myOrders.filter(o=>!state.selectedMyOrderIds.includes(o.id));
+  const n = state.selectedMyOrderIds.length;
+  state.selectedMyOrderIds = [];
+  showToast(n+'건 삭제했어요','🗑️');
+  render();
+}
+function clearMyOrders(){
+  if(state.myOrders.length===0) return;
+  if(!confirm('내 발주 현황을 화면에서 모두 삭제할까요? (실제 발주 기록은 그대로 남아있어요)')) return;
+  state.myOrders.forEach(o=>addMyDismissedId_(o.id));
+  state.myOrders = [];
+  state.selectedMyOrderIds = [];
+  showToast('전체 삭제했어요','🗑️');
+  render();
 }
 function openDetail(uid){
   state.screen='detail'; state.detailId=uid; state.qty=1; state.deliveryDate=tomorrow();
@@ -1002,6 +1058,7 @@ function render(){
   else if(state.screen==='admin') app.innerHTML = renderAdmin();
   else if(state.screen==='search') app.innerHTML = renderSearch();
   else if(state.screen==='account') app.innerHTML = renderAccount();
+  else if(state.screen==='myorders') app.innerHTML = renderMyOrders();
   else app.innerHTML = renderPlaceholder();
 
   document.getElementById('navbar-outer').innerHTML = (state.screen==='auth') ? '' : navbar();
@@ -1489,13 +1546,30 @@ function renderAccount(){
     <div style="padding:0 18px;">
       <button class="btn btn-outline btn-full" onclick="doLogout()">로그아웃</button>
     </div>
+  `;
+}
 
-    <div class="section-title" style="margin-top:20px;">
-      <div class="st-left">
-        내 발주 현황
-        <small>· 관리자 확인 여부를 볼 수 있어요</small>
+function renderMyOrders(){
+  if(!state.currentUser){
+    return `
+      <div class="topbar"><div class="brand" onclick="goHome()">‹ 내 발주 현황</div><div></div></div>
+      <div class="placeholder">
+        <div class="big">🧾</div>
+        <div class="t">로그인이 필요해요</div>
+        <div class="d">내가 보낸 발주 현황과 관리자 확인 여부를 보려면 로그인해주세요.</div>
+        <button class="btn btn-solid" style="margin-top:16px;padding-left:24px;padding-right:24px;flex:none;" onclick="state.screenBeforeAuth='myorders'; state.screen='auth'; render();">로그인 / 회원가입</button>
       </div>
-      <div class="search-clear" style="cursor:pointer;" onclick="goAccount()">🔄 새로고침</div>
+    `;
+  }
+  const allSelected = state.myOrders.length>0 && state.selectedMyOrderIds.length===state.myOrders.length;
+  return `
+    <div class="admin-header">
+      <div class="admin-title" onclick="goHome()" style="cursor:pointer;">‹ 내 발주 현황</div>
+      <div class="admin-sub">관리자가 확인했는지 여기서 볼 수 있어요. (화면에서 삭제해도 실제 발주 기록은 그대로 남아있어요)</div>
+      <div style="display:flex;gap:14px;margin-top:8px;">
+        <div class="search-clear" style="cursor:pointer;" onclick="goMyOrders()">🔄 새로고침</div>
+        ${state.myOrders.length>0 ? `<div class="search-clear" style="cursor:pointer;" onclick="clearMyOrders()">전체삭제</div>` : ''}
+      </div>
     </div>
     ${state.myOrdersLoading ? `
       <div class="empty"><div class="big">⏳</div>불러오는 중...</div>
@@ -1510,12 +1584,25 @@ function renderAccount(){
         아직 보낸 발주 요청이 없어요.
       </div>
     ` : `
+      <div class="admin-select-bar">
+        <label class="admin-select-left">
+          <input type="checkbox" ${allSelected?'checked':''} onchange="toggleSelectAllMyOrders(this.checked)">
+          전체선택
+        </label>
+        <button class="admin-confirm-btn" style="background:var(--coral);" ${state.selectedMyOrderIds.length===0?'disabled':''} onclick="removeSelectedMyOrders()">선택삭제 (${state.selectedMyOrderIds.length})</button>
+      </div>
       <div class="alist" style="padding-bottom:20px;">
         ${state.myOrders.map(o=>`
           <div class="aitem">
             <div class="arow1">
-              <div class="aname"><span class="ordertype-badge ${o.orderType||'planned'}">${orderTypeShort(o.orderType)}</span>${o.name}</div>
-              <div class="astatus ${o.status==='확인'?'done':''}">${o.status==='확인'?'✅ 확인완료':'⏳ 확인대기'}</div>
+              <div class="aitem-check">
+                <input type="checkbox" ${state.selectedMyOrderIds.includes(o.id)?'checked':''} onchange="toggleMyOrderSelect('${o.id}', this.checked)">
+                <div class="aname"><span class="ordertype-badge ${o.orderType||'planned'}">${orderTypeShort(o.orderType)}</span>${o.name}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div class="astatus ${o.status==='확인'?'done':''}">${o.status==='확인'?'✅ 확인완료':'⏳ 확인대기'}</div>
+                <div class="cremove-x" onclick="removeMyOrder('${o.id}')">×</div>
+              </div>
             </div>
             <div class="adetail">
               수량 <b>${o.qty}</b> · 납품 <b>${formatAdminDeliveryLabel(o)}</b> · 금액 <b>${money(o.price)}원</b><br>
@@ -1534,6 +1621,7 @@ function navbar(){
     {key:'home', ico:'🏠', label:'홈', onClick:'goHome()'},
     {key:'search', ico:'🔍', label:'검색', onClick:'goSearch()'},
     {key:'cart', ico:'🧺', label:'장바구니', onClick:'goCart()'},
+    {key:'myorders', ico:'🧾', label:'내발주', onClick:'goMyOrders()'},
     {key:'account', ico:'👤', label:'마이', onClick:"goAccount()"},
   ];
   return `
@@ -1568,11 +1656,12 @@ if(firebaseReady){
       if(state.screen==='auth'){
         state.screen = state.screenBeforeAuth || 'home';
         showToast('로그인됐어요','✅');
-        if(state.screen==='account'){
+        if(state.screen==='myorders'){
           state.myOrdersLoading = true;
           state.myOrdersError = false;
           loadOrdersFromSheet_().then(list=>{
-            state.myOrders = list.filter(o=>o.email===user.email);
+            const mine = list.filter(o=>o.email===user.email);
+            state.myOrders = applyMyDismissed_(mine);
             state.myOrdersLoading = false;
             render();
           }).catch(err=>{
