@@ -149,6 +149,26 @@
   .dateinput{height:42px;}
   .timerow{display:flex;gap:8px;}
   .timeselect{flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;color:var(--ink);background:#fff;height:42px;}
+
+  .ordertype-group{display:flex;gap:10px;}
+  .ordertype-option{flex:1;display:flex;align-items:center;gap:9px;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;cursor:pointer;background:#fff;}
+  .ordertype-option.active{border-color:var(--navy);background:var(--sand);}
+  .ordertype-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;position:relative;background:#fff;}
+  .ordertype-option.active .ordertype-dot{border-color:var(--navy);}
+  .ordertype-option.active .ordertype-dot::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--navy);}
+  .ordertype-label{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .ordertype-desc{font-size:9.5px;color:var(--muted);margin-top:1px;}
+  .ordertype-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;margin-right:6px;vertical-align:middle;}
+  .ordertype-badge.planned{background:var(--sand);color:var(--navy);}
+  .ordertype-badge.confirmed{background:var(--coral-dim);color:var(--coral);}
+  .astatus.done{background:#e4ecdf;color:var(--sage);}
+  .admin-select-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 18px 12px;}
+  .admin-select-left{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--navy);font-weight:600;cursor:pointer;}
+  .admin-select-left input{width:16px;height:16px;}
+  .admin-confirm-btn{flex:0 0 auto;padding:9px 14px;border-radius:10px;border:none;background:var(--navy);color:#fff;font-size:12px;font-weight:700;cursor:pointer;}
+  .admin-confirm-btn:disabled{opacity:.4;cursor:default;}
+  .aitem-check{display:flex;align-items:flex-start;gap:9px;}
+  .aitem-check input{width:17px;height:17px;margin-top:2px;flex:0 0 auto;}
   .hint{font-size:10.5px;color:var(--muted);margin-top:6px;}
 
   .btnrow{display:flex;gap:8px;padding:6px 18px 18px;margin-top:auto;}
@@ -578,6 +598,7 @@ let state = {
   deliveryDate:'',
   deliveryPeriod:'AM',
   deliveryHour:6,
+  orderType:'planned',
   cart:[],
   adminLog:[],
   searchTerm:'',
@@ -595,9 +616,15 @@ let state = {
   ordersError:false,
   pendingOrderCount:0,
   showOrderConfirm:false,
+  selectedOrderIds:[],
+  myOrders:[],
+  myOrdersLoading:false,
+  myOrdersError:false,
 };
 
 function money(n){ return n.toLocaleString('ko-KR'); }
+function orderTypeLabel(t){ return t==='confirmed' ? '확정량 발주' : '예정량 발주'; }
+function orderTypeShort(t){ return t==='confirmed' ? '확정량' : '예정량'; }
 function findProduct(uid){ return PRODUCTS.find(p=>p.uid===uid); }
 function tomorrow(){
   const d=new Date(); d.setDate(d.getDate()+1);
@@ -633,6 +660,7 @@ function loadAppState(){
       state.deliveryDate = tomorrow();
       state.deliveryPeriod = 'AM';
       state.deliveryHour = 6;
+      state.orderType = 'planned';
     }
   }catch(e){ /* 저장된 값이 깨졌으면 무시하고 기본값 사용 */ }
 }
@@ -651,6 +679,7 @@ function goAdmin(){
   state.screen='admin';
   state.ordersLoading = true;
   state.ordersError = false;
+  state.selectedOrderIds = [];
   render();
   loadOrdersFromSheet_().then(list=>{
     state.remoteOrders = applyDismissed_(list);
@@ -701,11 +730,31 @@ function refreshAdminBadge(){
   }).catch(()=>{ /* 배지 갱신 실패는 조용히 무시 */ });
 }
 function goSearch(){ state.screen='search'; state.searchTerm=''; render(); }
+function goAccount(){
+  state.screen='account';
+  render();
+  if(!state.currentUser) return;
+  state.myOrdersLoading = true;
+  state.myOrdersError = false;
+  render();
+  loadOrdersFromSheet_().then(list=>{
+    const email = state.currentUser.email;
+    state.myOrders = list.filter(o=>o.email===email);
+    state.myOrdersLoading = false;
+    render();
+  }).catch(err=>{
+    console.error('내 발주 조회 실패:', err);
+    state.myOrdersLoading = false;
+    state.myOrdersError = true;
+    render();
+  });
+}
 function openDetail(uid){
   state.screen='detail'; state.detailId=uid; state.qty=1; state.deliveryDate=tomorrow();
-  state.deliveryPeriod='AM'; state.deliveryHour=6;
+  state.deliveryPeriod='AM'; state.deliveryHour=6; state.orderType='planned';
   render();
 }
+function setOrderType(v){ state.orderType=v; render(); }
 function setCat(c){ state.activeCat=c; state.currentPage=1; render(); }
 function setBanner(i){ state.bannerIdx=i; render(); }
 function setSearch(v){ state.searchTerm=v; renderSearchListOnly(); }
@@ -767,9 +816,9 @@ function addToCart(){
   if(!state.deliveryDate){ showToast('납품일을 입력해주세요','⚠️'); return; }
   if(!isValidDate_(state.deliveryDate)){ showToast('납품일을 YYYY-MM-DD 형식으로 입력해주세요','⚠️'); return; }
   const p = findProduct(state.detailId);
-  const existing = state.cart.find(c=>c.productId===p.uid && c.deliveryDate===state.deliveryDate && (c.deliveryPeriod||'AM')===state.deliveryPeriod && (c.deliveryHour||6)===state.deliveryHour);
+  const existing = state.cart.find(c=>c.productId===p.uid && c.deliveryDate===state.deliveryDate && (c.deliveryPeriod||'AM')===state.deliveryPeriod && (c.deliveryHour||6)===state.deliveryHour && (c.orderType||'planned')===state.orderType);
   if(existing){ existing.qty += state.qty; }
-  else { state.cart.push({productId:p.uid, qty:state.qty, deliveryDate:state.deliveryDate, deliveryPeriod:state.deliveryPeriod, deliveryHour:state.deliveryHour}); }
+  else { state.cart.push({productId:p.uid, qty:state.qty, deliveryDate:state.deliveryDate, deliveryPeriod:state.deliveryPeriod, deliveryHour:state.deliveryHour, orderType:state.orderType}); }
   showToast(p.name+' 장바구니에 담았어요','🛒');
   render();
 }
@@ -818,11 +867,12 @@ async function confirmSubmitOrder(){
   const orderItems = state.cart.map(c=>{
     const p = findProduct(c.productId);
     const deliveryTime = deliveryTimeLabel(c.deliveryPeriod||'AM', c.deliveryHour||6);
-    return { name:p.name, code:p.code, qty:c.qty, deliveryDate:c.deliveryDate, deliveryTime, price:p.price*c.qty };
+    const orderType = c.orderType||'planned';
+    return { name:p.name, code:p.code, qty:c.qty, deliveryDate:c.deliveryDate, deliveryTime, orderType, orderTypeLabel:orderTypeShort(orderType), price:p.price*c.qty };
   });
   orderItems.forEach(item=>{
     state.adminLog.unshift({
-      name:item.name, qty:item.qty, deliveryDate:item.deliveryDate, deliveryTime:item.deliveryTime, price:item.price, time:timeLabel, status:'신규'
+      name:item.name, qty:item.qty, deliveryDate:item.deliveryDate, deliveryTime:item.deliveryTime, orderType:item.orderType, price:item.price, time:timeLabel, status:'신규'
     });
   });
   state.cart = [];
@@ -859,12 +909,50 @@ function removeAdminLog(idx){
   if(!o) return;
   addDismissedId_(o.id);
   state.remoteOrders.splice(idx,1);
+  state.selectedOrderIds = state.selectedOrderIds.filter(id=>id!==o.id);
   render();
 }
 function clearAdminLog(){
   state.remoteOrders.forEach(o=>addDismissedId_(o.id));
   state.remoteOrders = [];
+  state.selectedOrderIds = [];
   render();
+}
+
+function toggleOrderSelect(id, checked){
+  if(checked){ if(!state.selectedOrderIds.includes(id)) state.selectedOrderIds.push(id); }
+  else{ state.selectedOrderIds = state.selectedOrderIds.filter(x=>x!==id); }
+  render();
+}
+function toggleSelectAllOrders(checked){
+  state.selectedOrderIds = checked ? state.remoteOrders.filter(o=>o.status!=='확인').map(o=>o.id) : [];
+  render();
+}
+async function confirmSelectedOrders(){
+  if(state.selectedOrderIds.length===0){ showToast('선택된 발주가 없어요','⚠️'); return; }
+  if(!SHEET_API_URL){ showToast('시트 연동이 설정되어 있지 않아요','⚠️'); return; }
+  const ids = state.selectedOrderIds.slice();
+  try{
+    const res = await fetch(SHEET_API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'confirm', ids })
+    });
+    const data = await res.json();
+    if(!data || data.ok===false){
+      console.error('확인 처리 실패 응답:', data);
+      showToast('⚠️ 확인 처리에 실패했어요. Apps Script에 확인 처리 기능이 있는지 확인해주세요','⚠️');
+      return;
+    }
+    state.remoteOrders.forEach(o=>{ if(ids.includes(o.id)) o.status='확인'; });
+    state.pendingOrderCount = state.remoteOrders.filter(o=>o.status==='신규').length;
+    state.selectedOrderIds = [];
+    showToast(ids.length+'건 확인 처리했어요','✅');
+    render();
+  }catch(err){
+    console.error('확인 처리 실패 (네트워크/CORS):', err);
+    showToast('⚠️ 확인 처리 중 오류가 발생했어요','⚠️');
+  }
 }
 
 function renderOrderConfirmModal(){
@@ -884,7 +972,7 @@ function renderOrderConfirmModal(){
             return `
             <div class="order-modal-item">
               <div>
-                <div class="order-modal-item-name">${p.name}</div>
+                <div class="order-modal-item-name"><span class="ordertype-badge ${c.orderType||'planned'}">${orderTypeShort(c.orderType)}</span>${p.name}</div>
                 <div class="order-modal-item-meta">납품 ${deliveryFullLabel(c.deliveryDate, c.deliveryPeriod||'AM', c.deliveryHour||6)}</div>
               </div>
               <div class="order-modal-item-qty">${c.qty}개</div>
@@ -1142,6 +1230,26 @@ function renderDetail(){
       <div class="detail-price">${money(p.price)}<small>원 / ${p.pack}</small></div>
 
       <div class="field">
+        <label>발주 유형</label>
+        <div class="ordertype-group">
+          <div class="ordertype-option ${state.orderType==='planned'?'active':''}" onclick="setOrderType('planned')">
+            <div class="ordertype-dot"></div>
+            <div>
+              <div class="ordertype-label">예정량 발주</div>
+              <div class="ordertype-desc">추후 변경 가능</div>
+            </div>
+          </div>
+          <div class="ordertype-option ${state.orderType==='confirmed'?'active':''}" onclick="setOrderType('confirmed')">
+            <div class="ordertype-dot"></div>
+            <div>
+              <div class="ordertype-label">확정량 발주</div>
+              <div class="ordertype-desc">최종 확정 수량</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
         <label>수량</label>
         <div class="stepper">
           <button onclick="changeQty(-1)">−</button>
@@ -1204,7 +1312,7 @@ function renderCart(){
             <div class="citem-top">
               <div class="cthumb" onclick="openDetail(${p.uid})">${img?`<img src="${img}" alt="${p.name}">`:ICON[p.category]}</div>
               <div class="cinfo">
-                <div class="cname" onclick="openDetail(${p.uid})">${p.name}</div>
+                <div class="cname" onclick="openDetail(${p.uid})"><span class="ordertype-badge ${c.orderType||'planned'}">${orderTypeShort(c.orderType)}</span>${p.name}</div>
                 <div class="cmeta">납품 <b>${deliveryFullLabel(c.deliveryDate, c.deliveryPeriod||'AM', c.deliveryHour||6)}</b></div>
                 <div class="cmeta">${money(p.price*c.qty)}원</div>
               </div>
@@ -1232,6 +1340,8 @@ function renderCart(){
 }
 
 function renderAdmin(){
+  const selectableCount = state.remoteOrders.filter(o=>o.status!=='확인').length;
+  const allSelected = selectableCount>0 && state.selectedOrderIds.length===selectableCount;
   return `
     <div class="admin-header">
       <div class="admin-title" onclick="goHome()" style="cursor:pointer;">‹ 관리자 페이지</div>
@@ -1254,13 +1364,23 @@ function renderAdmin(){
         아직 접수된 발주 요청이 없어요.
       </div>
     ` : `
+      <div class="admin-select-bar">
+        <label class="admin-select-left">
+          <input type="checkbox" ${allSelected?'checked':''} ${selectableCount===0?'disabled':''} onchange="toggleSelectAllOrders(this.checked)">
+          전체선택 (${selectableCount}건)
+        </label>
+        <button class="admin-confirm-btn" ${state.selectedOrderIds.length===0?'disabled':''} onclick="confirmSelectedOrders()">선택 확인 (${state.selectedOrderIds.length})</button>
+      </div>
       <div class="alist">
         ${state.remoteOrders.map((a,idx)=>`
           <div class="aitem">
             <div class="arow1">
-              <div class="aname">${a.name}</div>
+              <div class="aitem-check">
+                ${a.status!=='확인' ? `<input type="checkbox" ${state.selectedOrderIds.includes(a.id)?'checked':''} onchange="toggleOrderSelect('${a.id}', this.checked)">` : `<div style="width:17px;"></div>`}
+                <div class="aname"><span class="ordertype-badge ${a.orderType||'planned'}">${orderTypeShort(a.orderType)}</span>${a.name}</div>
+              </div>
               <div style="display:flex;align-items:center;gap:6px;">
-                <div class="astatus">${a.status}</div>
+                <div class="astatus ${a.status==='확인'?'done':''}">${a.status==='확인'?'확인완료':a.status}</div>
                 <div class="cremove-x" onclick="removeAdminLog(${idx})">×</div>
               </div>
             </div>
@@ -1369,6 +1489,42 @@ function renderAccount(){
     <div style="padding:0 18px;">
       <button class="btn btn-outline btn-full" onclick="doLogout()">로그아웃</button>
     </div>
+
+    <div class="section-title" style="margin-top:20px;">
+      <div class="st-left">
+        내 발주 현황
+        <small>· 관리자 확인 여부를 볼 수 있어요</small>
+      </div>
+      <div class="search-clear" style="cursor:pointer;" onclick="goAccount()">🔄 새로고침</div>
+    </div>
+    ${state.myOrdersLoading ? `
+      <div class="empty"><div class="big">⏳</div>불러오는 중...</div>
+    ` : state.myOrdersError ? `
+      <div class="empty">
+        <div class="big">⚠️</div>
+        발주 내역을 불러오지 못했어요.<br>잠시 후 새로고침 해주세요.
+      </div>
+    ` : (!state.myOrders || state.myOrders.length===0) ? `
+      <div class="empty">
+        <div class="big">📋</div>
+        아직 보낸 발주 요청이 없어요.
+      </div>
+    ` : `
+      <div class="alist" style="padding-bottom:20px;">
+        ${state.myOrders.map(o=>`
+          <div class="aitem">
+            <div class="arow1">
+              <div class="aname"><span class="ordertype-badge ${o.orderType||'planned'}">${orderTypeShort(o.orderType)}</span>${o.name}</div>
+              <div class="astatus ${o.status==='확인'?'done':''}">${o.status==='확인'?'✅ 확인완료':'⏳ 확인대기'}</div>
+            </div>
+            <div class="adetail">
+              수량 <b>${o.qty}</b> · 납품 <b>${formatAdminDeliveryLabel(o)}</b> · 금액 <b>${money(o.price)}원</b><br>
+              접수 시각 ${o.time}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
   `;
 }
 
@@ -1378,7 +1534,7 @@ function navbar(){
     {key:'home', ico:'🏠', label:'홈', onClick:'goHome()'},
     {key:'search', ico:'🔍', label:'검색', onClick:'goSearch()'},
     {key:'cart', ico:'🧺', label:'장바구니', onClick:'goCart()'},
-    {key:'account', ico:'👤', label:'마이', onClick:"state.screen='account';render();"},
+    {key:'account', ico:'👤', label:'마이', onClick:"goAccount()"},
   ];
   return `
     <div class="navbar">
@@ -1412,6 +1568,20 @@ if(firebaseReady){
       if(state.screen==='auth'){
         state.screen = state.screenBeforeAuth || 'home';
         showToast('로그인됐어요','✅');
+        if(state.screen==='account'){
+          state.myOrdersLoading = true;
+          state.myOrdersError = false;
+          loadOrdersFromSheet_().then(list=>{
+            state.myOrders = list.filter(o=>o.email===user.email);
+            state.myOrdersLoading = false;
+            render();
+          }).catch(err=>{
+            console.error('내 발주 조회 실패:', err);
+            state.myOrdersLoading = false;
+            state.myOrdersError = true;
+            render();
+          });
+        }
       }
       if(state.isAdmin){
         refreshAdminBadge();
