@@ -11,6 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#eef1ef;
@@ -262,6 +263,36 @@
   .account-role{display:inline-block;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--sand);color:var(--navy);}
   .account-role.admin{background:var(--coral-dim);color:var(--coral);}
 
+  /* [추가됨] ===== 채팅 ===== */
+  .chatlist{padding:6px 18px;display:flex;flex-direction:column;gap:10px;}
+  .chatitem{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;align-items:center;}
+  .chatitem:active{transform:scale(.98);}
+  .chatitem-avatar{width:44px;height:44px;border-radius:50%;background:var(--sand);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--navy);flex:0 0 auto;}
+  .chatitem-info{flex:1;min-width:0;}
+  .chatitem-name{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:2px;}
+  .chatitem-last{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chatitem-meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto;}
+  .chatitem-time{font-size:9.5px;color:var(--muted);}
+  .chatitem-unread{background:var(--coral);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .chat-thread-head{display:flex;align-items:center;gap:10px;padding:14px 18px 12px;border-bottom:1px solid var(--line);flex:0 0 auto;}
+  .chat-thread-back{width:30px;height:30px;border-radius:50%;background:var(--sand);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex:0 0 auto;}
+  .chat-thread-title{font-size:14px;font-weight:700;color:var(--navy);}
+  .chat-thread-sub{font-size:10.5px;color:var(--muted);margin-top:1px;}
+  .chat-messages{flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:10px;}
+  .msg-row{display:flex;}
+  .msg-row.mine{justify-content:flex-end;}
+  .msg-row.theirs{justify-content:flex-start;}
+  .msg-col{max-width:75%;display:flex;flex-direction:column;}
+  .msg-row.mine .msg-col{align-items:flex-end;}
+  .msg-row.theirs .msg-col{align-items:flex-start;}
+  .msg-bubble{padding:9px 12px;border-radius:14px;font-size:12.5px;line-height:1.5;word-break:break-word;white-space:pre-wrap;}
+  .msg-row.mine .msg-bubble{background:var(--navy);color:#fff;border-bottom-right-radius:4px;}
+  .msg-row.theirs .msg-bubble{background:var(--sand);color:var(--ink);border-bottom-left-radius:4px;}
+  .msg-time{font-size:8.5px;color:var(--muted);margin-top:3px;}
+  .chat-input-bar{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line);background:#fff;flex:0 0 auto;}
+  .chat-input-bar input{flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:20px;font-size:13px;font-family:inherit;}
+  .chat-input-bar button{width:42px;height:42px;border-radius:50%;border:none;background:var(--coral);color:#fff;font-size:15px;cursor:pointer;flex:0 0 auto;}
+
   /* [추가됨] ===== PWA 및 모바일 전용 최적화 (이중 스크롤 방지 & 꽉 찬 화면) ===== */
   @media screen and (max-width: 768px) {
     html, body {
@@ -367,12 +398,17 @@ const FIREBASE_CONFIG = {
 const ADMIN_EMAILS = ['kojubu3233@gmail.com'];
 
 let firebaseReady = false;
+let firestoreReady = false;
 let auth = null;
+let db = null;
 try{
   if(FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes('여기에')){
     firebase.initializeApp(FIREBASE_CONFIG);
     auth = firebase.auth();
     firebaseReady = true;
+    // 채팅 기능: Firebase 콘솔에서 Firestore Database를 만들어야 활성화돼요 (아래 안내 참고)
+    db = firebase.firestore();
+    firestoreReady = true;
   }
 }catch(e){ console.error('Firebase 초기화 실패:', e); }
 
@@ -621,6 +657,18 @@ let state = {
   myOrdersLoading:false,
   myOrdersError:false,
   selectedMyOrderIds:[],
+  // [추가됨] 채팅
+  chatScreen:'thread', // admin: 'list' | 'thread', 거래처: 항상 'thread'
+  chatMessages:[],
+  chatText:'',
+  chatList:[], // 관리자: 전체 채팅방 목록
+  activeChatId:null, // 현재 열려있는 채팅방 id (거래처 uid)
+  activeChatOrg:'',
+  chatUnsub:null, // 현재 열린 채팅방 메시지 구독 해제 함수
+  chatListUnsub:null, // 관리자 채팅 목록 구독 해제 함수
+  myChatUnsub:null, // 거래처 뱃지 구독 해제 함수
+  myChatUnread:false, // 거래처용 뱃지
+  adminChatUnreadCount:0, // 관리자용 뱃지
 };
 
 function money(n){ return n.toLocaleString('ko-KR'); }
@@ -674,9 +722,10 @@ function showToast(msg, icon){
   window.__toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
 }
 
-function goHome(){ state.screen='home'; render(); }
-function goCart(){ state.screen='cart'; render(); }
+function goHome(){ detachChatThreadListener_(); state.screen='home'; render(); }
+function goCart(){ detachChatThreadListener_(); state.screen='cart'; render(); }
 function goAdmin(){
+  detachChatThreadListener_();
   state.screen='admin';
   state.ordersLoading = true;
   state.ordersError = false;
@@ -745,12 +794,14 @@ function refreshAdminBadge(){
     render();
   }).catch(()=>{ /* 배지 갱신 실패는 조용히 무시 */ });
 }
-function goSearch(){ state.screen='search'; state.searchTerm=''; render(); }
+function goSearch(){ detachChatThreadListener_(); state.screen='search'; state.searchTerm=''; render(); }
 function goAccount(){
+  detachChatThreadListener_();
   state.screen='account';
   render();
 }
 function goMyOrders(){
+  detachChatThreadListener_();
   state.screen='myorders';
   state.selectedMyOrderIds = [];
   render();
@@ -805,6 +856,230 @@ function clearMyOrders(){
   showToast('전체 삭제했어요','🗑️');
   render();
 }
+// ===== [추가됨] 채팅 (Firestore) =====
+// 구조: chats/{거래처uid} 문서 (org, email, lastMessage, lastMessageAt, unreadByAdmin, unreadByUser)
+//       chats/{거래처uid}/messages/{messageId} 하위 컬렉션 (senderId, senderRole, text, createdAt)
+function chatDocRef_(chatId){ return db.collection('chats').doc(chatId); }
+function chatMessagesRef_(chatId){ return chatDocRef_(chatId).collection('messages'); }
+
+function ensureChatDoc_(chatId, org, email){
+  return chatDocRef_(chatId).set({
+    org: org || '',
+    email: email || '',
+  }, { merge: true }).catch(err=>console.error('채팅방 생성 실패:', err));
+}
+
+function escapeHtml_(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function formatChatTime_(ts){
+  let d;
+  if(ts && ts.toDate) d = ts.toDate();
+  else if(ts instanceof Date) d = ts;
+  else return '';
+  return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function scrollChatToBottom_(){
+  setTimeout(()=>{
+    const box = document.getElementById('chatMessagesBox');
+    if(box) box.scrollTop = box.scrollHeight;
+  }, 30);
+}
+
+function detachChatThreadListener_(){
+  if(state.chatUnsub){ state.chatUnsub(); state.chatUnsub = null; }
+  state.chatMessages = [];
+}
+
+// 로그인 상태에 따라 뱃지(안읽음 표시)용 실시간 구독을 건다 — 채팅 화면을 안 보고 있어도 계속 감지
+function attachChatBadgeListener_(){
+  if(!firestoreReady || !state.currentUser) return;
+  if(state.isAdmin){
+    if(state.chatListUnsub) return;
+    state.chatListUnsub = db.collection('chats').orderBy('lastMessageAt','desc').onSnapshot(snap=>{
+      state.chatList = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      state.adminChatUnreadCount = state.chatList.filter(c=>c.unreadByAdmin).length;
+      render();
+    }, err=>console.error('채팅 목록 구독 실패:', err));
+  }else{
+    if(state.myChatUnsub) return;
+    state.myChatUnsub = chatDocRef_(state.currentUser.uid).onSnapshot(doc=>{
+      const data = doc.data();
+      state.myChatUnread = !!(data && data.unreadByUser);
+      render();
+    }, err=>console.error('채팅 뱃지 구독 실패:', err));
+  }
+}
+function detachAllChatListeners_(){
+  if(state.chatListUnsub){ state.chatListUnsub(); state.chatListUnsub = null; }
+  if(state.myChatUnsub){ state.myChatUnsub(); state.myChatUnsub = null; }
+  detachChatThreadListener_();
+  state.chatList = [];
+  state.adminChatUnreadCount = 0;
+  state.myChatUnread = false;
+}
+
+function goChat(){
+  state.screen = 'chat';
+  if(!state.currentUser || !firestoreReady){ render(); return; }
+  if(state.isAdmin){
+    state.chatScreen = 'list';
+    render();
+  }else{
+    state.chatScreen = 'thread';
+    openMyChatThread_();
+    render();
+  }
+}
+
+function openMyChatThread_(){
+  const uid = state.currentUser.uid;
+  state.activeChatId = uid;
+  ensureChatDoc_(uid, state.currentUser.displayName, state.currentUser.email);
+  chatDocRef_(uid).set({ unreadByUser:false }, { merge:true }).catch(()=>{});
+  detachChatThreadListener_();
+  state.chatUnsub = chatMessagesRef_(uid).orderBy('createdAt','asc').onSnapshot(snap=>{
+    state.chatMessages = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    render();
+    scrollChatToBottom_();
+  }, err=>console.error('메시지 구독 실패:', err));
+}
+
+// 관리자가 채팅 목록에서 특정 거래처를 탭했을 때
+function openChatThread(chatId, org){
+  state.chatScreen = 'thread';
+  state.activeChatId = chatId;
+  state.activeChatOrg = org;
+  render();
+  chatDocRef_(chatId).set({ unreadByAdmin:false }, { merge:true }).catch(()=>{});
+  detachChatThreadListener_();
+  state.chatUnsub = chatMessagesRef_(chatId).orderBy('createdAt','asc').onSnapshot(snap=>{
+    state.chatMessages = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    render();
+    scrollChatToBottom_();
+  }, err=>console.error('메시지 구독 실패:', err));
+}
+
+function backToChatList(){
+  detachChatThreadListener_();
+  state.chatScreen = 'list';
+  state.activeChatId = null;
+  render();
+}
+
+function setChatText(v){ state.chatText = v; }
+
+function sendChatMessage(){
+  const text = (state.chatText||'').trim();
+  if(!text || !state.activeChatId || !state.currentUser) return;
+  const chatId = state.activeChatId;
+  const isAdminSender = state.isAdmin;
+  state.chatText = '';
+  render();
+  chatMessagesRef_(chatId).add({
+    senderId: state.currentUser.uid,
+    senderRole: isAdminSender ? 'admin' : 'user',
+    text: text,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }).then(()=>{
+    return chatDocRef_(chatId).set({
+      lastMessage: text,
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+      unreadByAdmin: !isAdminSender,
+      unreadByUser: isAdminSender,
+    }, { merge:true });
+  }).catch(err=>{
+    console.error('메시지 전송 실패:', err);
+    showToast('메시지 전송에 실패했어요','⚠️');
+  });
+}
+
+function renderChat(){
+  if(!state.currentUser){
+    return `
+      <div class="topbar"><div class="brand" onclick="goHome()">‹ 채팅</div><div></div></div>
+      <div class="placeholder">
+        <div class="big">💬</div>
+        <div class="t">로그인이 필요해요</div>
+        <div class="d">담당자와 채팅하려면 로그인해주세요.</div>
+        <button class="btn btn-solid" style="margin-top:16px;padding-left:24px;padding-right:24px;flex:none;" onclick="state.screenBeforeAuth='chat'; state.screen='auth'; render();">로그인 / 회원가입</button>
+      </div>
+    `;
+  }
+  if(!firestoreReady){
+    return `
+      <div class="topbar"><div class="brand" onclick="goHome()">‹ 채팅</div><div></div></div>
+      <div class="placeholder">
+        <div class="big">⚠️</div>
+        <div class="t">채팅 기능이 아직 설정되지 않았어요</div>
+        <div class="d">Firebase 콘솔에서 Firestore Database를 활성화해주세요.</div>
+      </div>
+    `;
+  }
+  if(state.isAdmin && state.chatScreen==='list') return renderChatList();
+  return renderChatThread();
+}
+
+function renderChatList(){
+  return `
+    <div class="topbar"><div class="brand" onclick="goHome()">‹ 채팅</div><div></div></div>
+    ${state.chatList.length===0 ? `
+      <div class="empty"><div class="big">💬</div>아직 온 채팅이 없어요.</div>
+    ` : `
+      <div class="chatlist">
+        ${state.chatList.map(c=>`
+          <div class="chatitem" onclick="openChatThread('${c.id}', '${escapeHtml_(c.org||'거래처').replace(/'/g,"\\'")}')">
+            <div class="chatitem-avatar">${escapeHtml_((c.org||'거')[0])}</div>
+            <div class="chatitem-info">
+              <div class="chatitem-name">${escapeHtml_(c.org || c.email || '거래처')}</div>
+              <div class="chatitem-last">${c.lastMessage ? escapeHtml_(c.lastMessage) : '대화를 시작해보세요'}</div>
+            </div>
+            <div class="chatitem-meta">
+              <div class="chatitem-time">${formatChatTime_(c.lastMessageAt)}</div>
+              ${c.unreadByAdmin ? `<div class="chatitem-unread">●</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
+  `;
+}
+
+function renderChatThread(){
+  const title = state.isAdmin ? (state.activeChatOrg || '거래처') : '코주부씨앤에프 담당자';
+  const backAction = state.isAdmin ? 'backToChatList()' : 'goHome()';
+  return `
+    <div class="chat-thread-head">
+      <div class="chat-thread-back" onclick="${backAction}">‹</div>
+      <div>
+        <div class="chat-thread-title">${escapeHtml_(title)}</div>
+        <div class="chat-thread-sub">${state.isAdmin ? '' : '보통 영업일 기준 빠르게 답변드려요'}</div>
+      </div>
+    </div>
+    <div class="chat-messages" id="chatMessagesBox">
+      ${state.chatMessages.length===0 ? `<div class="empty" style="padding:40px 20px;"><div class="big">💬</div>메시지를 보내보세요.</div>` : state.chatMessages.map(m=>{
+        const mine = state.isAdmin ? m.senderRole==='admin' : m.senderRole!=='admin';
+        return `
+          <div class="msg-row ${mine?'mine':'theirs'}">
+            <div class="msg-col">
+              <div class="msg-bubble">${escapeHtml_(m.text)}</div>
+              <div class="msg-time">${formatChatTime_(m.createdAt)}</div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div class="chat-input-bar">
+      <input type="text" placeholder="메시지를 입력하세요" value="${escapeHtml_(state.chatText)}" oninput="setChatText(this.value)" onkeydown="if(event.key==='Enter'){sendChatMessage();}">
+      <button onclick="sendChatMessage()">➤</button>
+    </div>
+  `;
+}
+
 function openDetail(uid){
   state.screen='detail'; state.detailId=uid; state.qty=1; state.deliveryDate=tomorrow();
   state.deliveryPeriod='AM'; state.deliveryHour=6; state.orderType='planned';
@@ -1059,6 +1334,7 @@ function render(){
   else if(state.screen==='search') app.innerHTML = renderSearch();
   else if(state.screen==='account') app.innerHTML = renderAccount();
   else if(state.screen==='myorders') app.innerHTML = renderMyOrders();
+  else if(state.screen==='chat') app.innerHTML = renderChat();
   else app.innerHTML = renderPlaceholder();
 
   document.getElementById('navbar-outer').innerHTML = (state.screen==='auth') ? '' : navbar();
@@ -1621,17 +1897,21 @@ function navbar(){
     {key:'home', ico:'🏠', label:'홈', onClick:'goHome()'},
     {key:'search', ico:'🔍', label:'검색', onClick:'goSearch()'},
     {key:'cart', ico:'🧺', label:'장바구니', onClick:'goCart()'},
+    {key:'chat', ico:'💬', label:'채팅', onClick:'goChat()'},
     {key:'myorders', ico:'🧾', label:'내발주', onClick:'goMyOrders()'},
     {key:'account', ico:'👤', label:'마이', onClick:"goAccount()"},
   ];
   return `
     <div class="navbar">
       ${items.map(it=>{
-        const isCart = it.key==='cart';
-        const count = state.cart.length;
+        // [추가됨] 채팅 뱃지: 관리자는 안읽은 채팅방 수, 거래처는 새 메시지 유무(●)
+        let count = 0;
+        if(it.key==='cart') count = state.cart.length;
+        else if(it.key==='chat') count = state.isAdmin ? state.adminChatUnreadCount : (state.myChatUnread ? 1 : 0);
+        const showBadge = count > 0;
         return `
         <div class="navitem ${active===it.key?'active':''}" onclick="${it.onClick}">
-          <div class="ico ${isCart?'cart-count':''}">${it.ico}${isCart&&count>0?`<span class="dot">${count}</span>`:''}</div>
+          <div class="ico ${showBadge?'cart-count':''}">${it.ico}${showBadge?`<span class="dot">${count>9?'9+':count}</span>`:''}</div>
           <div>${it.label}</div>
         </div>`;
       }).join('')}
@@ -1671,6 +1951,11 @@ if(firebaseReady){
             render();
           });
         }
+        // [추가됨] 로그인 직후 화면이 채팅이었다면 바로 채팅방을 열어줌
+        if(state.screen==='chat'){
+          if(state.isAdmin){ state.chatScreen = 'list'; }
+          else{ state.chatScreen = 'thread'; openMyChatThread_(); }
+        }
       }
       if(state.isAdmin){
         refreshAdminBadge();
@@ -1678,11 +1963,15 @@ if(firebaseReady){
           window.__adminBadgeTimer = setInterval(refreshAdminBadge, 30000); // 30초마다 새 발주 확인
         }
       }
+      // [추가됨] 채팅 뱃지 실시간 구독 시작
+      if(firestoreReady) attachChatBadgeListener_();
     }else{
       state.currentUser = null;
       state.isAdmin = false;
       state.pendingOrderCount = 0;
       if(window.__adminBadgeTimer){ clearInterval(window.__adminBadgeTimer); window.__adminBadgeTimer = null; }
+      // [추가됨] 로그아웃 시 채팅 관련 구독 전부 해제
+      detachAllChatListeners_();
     }
     state.authBusy = false;
     render();
