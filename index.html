@@ -651,6 +651,7 @@ let state = {
   ordersLoading:false,
   ordersError:false,
   pendingOrderCount:0,
+  latestOrderTime:'',
   showOrderConfirm:false,
   selectedOrderIds:[],
   myOrders:[],
@@ -785,14 +786,24 @@ function applyMyDismissed_(list){
   return list.filter(o=>!dismissed.includes(o.id));
 }
 
-// 관리자 알림 배지(상단 "관리자" 옆 숫자) 갱신 — 관리자 계정일 때만 주기적으로 확인
+// 관리자 알림 배지(하단 '발주관리' 탭 옆 숫자) 갱신 — 관리자 계정일 때만 주기적으로 확인
 function refreshAdminBadge(){
   if(!state.isAdmin || !SHEET_API_URL) return;
   loadOrdersFromSheet_().then(list=>{
     const visible = applyDismissed_(list);
     state.pendingOrderCount = visible.filter(o=>o.status==='신규').length;
+    const latestNew = visible.find(o=>o.status==='신규');
+    state.latestOrderTime = latestNew ? latestNew.time : '';
     render();
   }).catch(()=>{ /* 배지 갱신 실패는 조용히 무시 */ });
+}
+// [추가됨] 홈 화면 알림 벨: 페이지 이동 없이 요약만 토스트로 보여줌
+function showAdminNoticeSummary(){
+  if(state.pendingOrderCount>0){
+    showToast(`발주요청이 있습니다 (${state.pendingOrderCount}건) · ${state.latestOrderTime||''}`, '🔔');
+  }else{
+    showToast('새 발주 요청이 없어요','🔔');
+  }
 }
 function goSearch(){ detachChatThreadListener_(); state.screen='search'; state.searchTerm=''; render(); }
 function goAccount(){
@@ -1418,7 +1429,7 @@ function renderHome(){
         <div class="social">
           <a href="https://blog.naver.com/kojubu_2000510" target="_blank" rel="noopener" title="네이버블로그">N</a><a href="https://www.instagram.com/_kojubufood?igsh=MXdoeHl4aTUxMDgwaQ==" target="_blank" rel="noopener" title="인스타그램">IG</a><a href="https://pf.kakao.com/_btYsG/" target="_blank" rel="noopener" title="카카오톡 채널">K</a>
         </div>
-        ${state.isAdmin ? `<div class="admin-link" onclick="goAdmin()" style="position:relative;">관리자${state.pendingOrderCount>0?`<span style="position:absolute;top:-6px;right:-6px;background:var(--coral);color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${state.pendingOrderCount>9?'9+':state.pendingOrderCount}</span>`:''}</div>` : ''}
+        ${state.isAdmin ? `<div class="admin-link" onclick="showAdminNoticeSummary()" style="position:relative;">🔔${state.pendingOrderCount>0?`<span style="position:absolute;top:-6px;right:-6px;background:var(--coral);color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${state.pendingOrderCount>9?'9+':state.pendingOrderCount}</span>`:''}</div>` : ''}
       </div>
     </div>
 
@@ -1893,7 +1904,14 @@ function renderMyOrders(){
 
 function navbar(){
   const active = state.screen;
-  const items = [
+  // [수정됨] 관리자는 장바구니가 필요 없고, '내발주' 자리에 발주관리 화면이 들어감
+  const items = state.isAdmin ? [
+    {key:'home', ico:'🏠', label:'홈', onClick:'goHome()'},
+    {key:'search', ico:'🔍', label:'검색', onClick:'goSearch()'},
+    {key:'chat', ico:'💬', label:'채팅', onClick:'goChat()'},
+    {key:'admin', ico:'🧾', label:'발주관리', onClick:'goAdmin()'},
+    {key:'account', ico:'👤', label:'마이', onClick:"goAccount()"},
+  ] : [
     {key:'home', ico:'🏠', label:'홈', onClick:'goHome()'},
     {key:'search', ico:'🔍', label:'검색', onClick:'goSearch()'},
     {key:'cart', ico:'🧺', label:'장바구니', onClick:'goCart()'},
@@ -1904,10 +1922,11 @@ function navbar(){
   return `
     <div class="navbar">
       ${items.map(it=>{
-        // [추가됨] 채팅 뱃지: 관리자는 안읽은 채팅방 수, 거래처는 새 메시지 유무(●)
+        // [추가됨] 배지: 장바구니 개수 / 채팅 안읽음 / 관리자 신규 발주 개수
         let count = 0;
         if(it.key==='cart') count = state.cart.length;
         else if(it.key==='chat') count = state.isAdmin ? state.adminChatUnreadCount : (state.myChatUnread ? 1 : 0);
+        else if(it.key==='admin') count = state.pendingOrderCount;
         const showBadge = count > 0;
         return `
         <div class="navitem ${active===it.key?'active':''}" onclick="${it.onClick}">
