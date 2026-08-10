@@ -408,9 +408,6 @@ try{
     firebaseReady = true;
     // 채팅 기능: Firebase 콘솔에서 Firestore Database를 만들어야 활성화돼요 (아래 안내 참고)
     db = firebase.firestore();
-    // [추가됨] 일부 회사/공용 네트워크, 백신, 광고차단 확장 프로그램이 Firestore의 기본 연결 방식을
-    // 막아서 "화면엔 보이는데 서버엔 저장 안 됨" 현상이 생길 수 있어요. 아래 설정으로 우회해요.
-    db.settings({ experimentalForceLongPolling: true, merge: true });
     firestoreReady = true;
   }
 }catch(e){ console.error('Firebase 초기화 실패:', e); }
