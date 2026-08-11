@@ -11,6 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <style>
   :root{
     --bg:#eef1ef;
@@ -392,17 +393,35 @@ const FIREBASE_CONFIG = {
   authDomain: "kojubuorder.firebaseapp.com",
   projectId: "kojubuorder",
   appId: "1:803038701181:web:47613a60667bf610c0f314",
+  messagingSenderId: "803038701181",
 };
 // 관리자 권한을 줄 이메일 목록. 여기 있는 이메일로 로그인/가입하면 자동으로 관리자로 인식돼요.
 const ADMIN_EMAILS = ['kojubu3233@gmail.com'];
 
+// [추가됨] 푸시 알림용 VAPID 키. Firebase 콘솔 > 프로젝트 설정(⚙️) > Cloud Messaging 탭 >
+// "웹 구성" > "키 쌍 생성"에서 발급받은 값을 여기에 붙여넣어야 알림이 켜져요.
+const FCM_VAPID_KEY = '여기에_VAPID_키_붙여넣기';
+
 let firebaseReady = false;
 let auth = null;
+let messaging = null;
+let pushReady = false;
 try{
   if(FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes('여기에')){
     firebase.initializeApp(FIREBASE_CONFIG);
     auth = firebase.auth();
     firebaseReady = true;
+    // [추가됨] 푸시 알림 (VAPID 키가 설정되어 있어야 켜짐)
+    if(firebase.messaging && FCM_VAPID_KEY && !FCM_VAPID_KEY.includes('여기에')){
+      messaging = firebase.messaging();
+      pushReady = true;
+      messaging.onMessage(payload=>{
+        // 앱을 켜놓고 보고 있는 동안 알림이 오면 토스트로 보여줌 (백그라운드는 서비스워커가 처리)
+        const title = (payload.notification && payload.notification.title) || '알림';
+        const body = (payload.notification && payload.notification.body) || '';
+        showToast(`${title} · ${body}`, '🔔');
+      });
+    }
   }
 }catch(e){ console.error('Firebase 초기화 실패:', e); }
 
@@ -892,6 +911,59 @@ function chatPost_(payload){
     headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // CORS 프리플라이트 회피용 (발주 전송과 동일한 방식)
     body: JSON.stringify(payload)
   }).then(res=>res.json());
+}
+
+// ===== [추가됨] 푸시 알림 =====
+async function registerServiceWorkerForPush_(){
+  if(!('serviceWorker' in navigator)) return null;
+  try{
+    return await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  }catch(e){ console.error('서비스워커 등록 실패:', e); return null; }
+}
+
+function savePushToken_(token){
+  if(!SHEET_API_URL || !state.currentUser) return Promise.resolve();
+  const chatId = state.isAdmin ? 'admin' : state.currentUser.uid;
+  const role = state.isAdmin ? 'admin' : 'user';
+  return chatPost_({
+    action:'register_push_token',
+    chatId, role, token,
+    org: state.isAdmin ? '' : (state.currentUser.displayName||''),
+    email: state.currentUser.email || ''
+  }).catch(err=>console.error('푸시 토큰 등록 실패:', err));
+}
+
+// 버튼(마이페이지)에서 호출: 권한 요청 → 서비스워커 등록 → 토큰 발급 → 서버에 저장
+async function enablePushNotifications(){
+  if(!pushReady){ showToast('푸시 알림이 아직 설정되지 않았어요','⚠️'); return; }
+  if(!('Notification' in window)){ showToast('이 브라우저는 알림을 지원하지 않아요','⚠️'); return; }
+  if(Notification.permission === 'denied'){ showToast('브라우저 알림 권한이 차단되어 있어요. 사이트 설정에서 허용해주세요','⚠️'); return; }
+  try{
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){ showToast('알림 권한이 거부됐어요','⚠️'); return; }
+    const reg = await registerServiceWorkerForPush_();
+    if(!reg){ showToast('서비스워커 등록에 실패했어요','⚠️'); return; }
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if(!token){ showToast('알림 토큰을 가져오지 못했어요','⚠️'); return; }
+    await savePushToken_(token);
+    showToast('알림이 켜졌어요','🔔');
+    render();
+  }catch(err){
+    console.error('푸시 활성화 실패:', err);
+    showToast('알림 설정 중 오류가 발생했어요','⚠️');
+  }
+}
+
+// 로그인할 때마다 조용히 호출: 이미 권한을 허용한 적 있으면 토큰만 새로 갱신 (재요청 팝업 없음)
+async function silentlyRefreshPushToken_(){
+  if(!pushReady || !('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  try{
+    const reg = await registerServiceWorkerForPush_();
+    if(!reg) return;
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if(token) await savePushToken_(token);
+  }catch(err){ console.error('푸시 토큰 갱신 실패:', err); }
 }
 
 function fetchChatMessages_(chatId){
@@ -1842,6 +1914,11 @@ function renderAccount(){
       </div>
     `;
   }
+  const pushStatus = !pushReady ? null
+    : (typeof Notification==='undefined') ? null
+    : Notification.permission==='granted' ? '✅ 알림이 켜져있어요'
+    : Notification.permission==='denied' ? '⚠️ 알림이 차단되어 있어요 (브라우저 사이트 설정에서 허용 필요)'
+    : null;
   return `
     <div class="topbar"><div class="brand" onclick="goHome()">‹ 마이페이지</div><div></div></div>
     <div class="account-card">
@@ -1849,7 +1926,11 @@ function renderAccount(){
       <div class="account-row"><span>이메일</span><b>${u.email}</b></div>
       <div class="account-row"><span>권한</span><span class="account-role ${state.isAdmin?'admin':''}">${state.isAdmin?'관리자':'일반 거래처'}</span></div>
     </div>
-    <div style="padding:0 18px;">
+    <div style="padding:0 18px;display:flex;flex-direction:column;gap:10px;">
+      ${pushReady ? `
+        <button class="btn btn-outline btn-full" onclick="enablePushNotifications()">🔔 알림 켜기</button>
+        ${pushStatus ? `<div class="hint" style="text-align:center;">${pushStatus}</div>` : ''}
+      ` : ''}
       <button class="btn btn-outline btn-full" onclick="doLogout()">로그아웃</button>
     </div>
   `;
@@ -2008,6 +2089,8 @@ if(firebaseReady){
       }
       // [추가됨] 채팅 뱃지 폴링 시작 (구글시트 기반)
       startChatBadgePolling_();
+      // [추가됨] 이미 알림을 허용한 적 있으면 팝업 없이 토큰만 갱신
+      silentlyRefreshPushToken_();
     }else{
       state.currentUser = null;
       state.isAdmin = false;
